@@ -1,0 +1,2119 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data Stream · Dashboard</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ═══ ТЕМА (светлая) ═══════════════════════════════════════════════ */
+    :root {
+      --bg-app:    #f4f7fb;
+      --bg-card:   #ffffff;
+      --bg-elev:   #f1f5f9;
+      --bg-hover:  #e7eef5;
+      --bg-subtle: #f8fafc;
+
+      --border:        #e2e8f0;
+      --border-strong: #cbd5e1;
+
+      --text-primary:   #0f172a;
+      --text-secondary: #475569;
+      --text-soft:      #64748b;
+      --text-muted:     #94a3b8;
+
+      --accent:      #0891b2;
+      --accent-dark: #0e7490;
+      --accent-soft: #ecfeff;
+      --accent-mid:  #cffafe;
+
+      --success:      #059669;
+      --success-soft: #d1fae5;
+      --danger:       #dc2626;
+      --danger-soft:  #fee2e2;
+
+      --r-sm: 6px;
+      --r:    10px;
+      --shadow-sm: 0 1px 2px rgba(15,23,42,.04);
+      --shadow:    0 4px 12px rgba(15,23,42,.06), 0 1px 2px rgba(15,23,42,.04);
+      --shadow-lg: 0 12px 32px rgba(15,23,42,.12), 0 4px 8px rgba(15,23,42,.04);
+
+      --font-mono:    'JetBrains Mono', monospace;
+      --font-display: 'Manrope', system-ui, sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* Глобально включаем табличные цифры — все цифры одной ширины */
+    html, body {
+      min-height: 100%;
+      background: var(--bg-app);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      font-feature-settings: "tnum" 1;
+      font-variant-numeric: tabular-nums;
+      background-image:
+        radial-gradient(ellipse 800px 400px at top right, rgba(8,145,178,.05), transparent 60%),
+        radial-gradient(ellipse 600px 300px at top left,  rgba(99,102,241,.04), transparent 60%);
+      background-attachment: fixed;
+    }
+
+    .shell { max-width: 1500px; margin: 0 auto; padding: 24px 22px 60px; }
+
+    /* ═══ ШАПКА ═════════════════════════════════════════════════════════ */
+    header.top {
+      display: flex; align-items: flex-end; justify-content: space-between;
+      flex-wrap: wrap; gap: 16px;
+      margin-bottom: 22px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo-block { display: flex; align-items: center; gap: 14px; }
+    .pulse-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--accent); box-shadow: 0 0 0 4px rgba(8,145,178,.18);
+      animation: pulse 2s ease-in-out infinite; flex-shrink: 0;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: .6; transform: scale(.75); }
+    }
+    h1 {
+      font-family: var(--font-display);
+      font-size: clamp(22px, 4vw, 30px);
+      font-weight: 800; color: var(--text-primary);
+      letter-spacing: -.025em;
+    }
+    h1 span { color: var(--accent); }
+
+    .meta { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .meta-item {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; color: var(--text-muted);
+      letter-spacing: .04em; text-transform: uppercase; font-weight: 600;
+    }
+    .meta-item .value { color: var(--text-secondary); font-weight: 700; }
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid var(--border-strong); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin .7s linear infinite; display: none;
+    }
+    .spinner.active { display: block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .status-ok  { color: var(--success); font-size: 14px; }
+    .status-err { color: var(--danger);  font-size: 14px; }
+
+    /* ═══ ОШИБКА ═══════════════════════════════════════════════════════ */
+    #error-bar {
+      display: none; align-items: center; gap: 10px;
+      padding: 11px 16px;
+      background: var(--danger-soft); border: 1px solid #fca5a5;
+      border-radius: var(--r); color: #991b1b; font-size: 12px;
+      margin-bottom: 18px;
+    }
+    #error-bar.visible { display: flex; }
+    #error-bar .ml-auto { margin-left: auto; color: #b91c1c; opacity: .8; }
+
+    /* ═══ KPI ══════════════════════════════════════════════════════════ */
+    .kpi-grid {
+      display: grid; gap: 14px; margin-bottom: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+    .kpi-card {
+      position: relative;
+      padding: 18px 22px;
+      background: var(--bg-card);
+      border: 1px solid var(--border); border-radius: var(--r);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      transition: transform .2s, box-shadow .2s;
+    }
+    .kpi-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+    .kpi-card::before {
+      content: ''; position: absolute; top: 0; left: 0;
+      width: 4px; height: 100%; background: var(--c-accent, var(--accent));
+      border-radius: var(--r) 0 0 var(--r);
+    }
+    .kpi-label {
+      font-family: var(--font-display);
+      font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 10px; font-weight: 700;
+    }
+    .kpi-value {
+      font-family: var(--font-display); font-weight: 800;
+      font-size: clamp(24px, 3.2vw, 32px);
+      color: var(--text-primary);
+      line-height: 1.05;
+      letter-spacing: -.03em;
+      font-variant-numeric: tabular-nums;
+    }
+    .kpi-unit {
+      font-family: var(--font-display);
+      font-size: .55em;
+      color: var(--text-soft);
+      font-weight: 600;
+      margin-left: 4px;
+      letter-spacing: -.01em;
+    }
+    .kpi-sub {
+      margin-top: 8px; font-size: 11px; color: var(--text-soft);
+      font-family: var(--font-display); font-weight: 500;
+    }
+    .kpi-sub b { color: var(--c-accent, var(--accent)); font-weight: 700; }
+
+    /* ═══ Карточки ═════════════════════════════════════════════════════ */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      box-shadow: var(--shadow-sm);
+      padding: 18px 20px;
+    }
+    .card-title {
+      font-family: var(--font-display);
+      font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--text-soft); font-weight: 700;
+      margin-bottom: 14px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .card-title .em { color: var(--accent); }
+
+    /* ═══ ПАНЕЛЬ ФИЛЬТРОВ ══════════════════════════════════════════════ */
+    .filter-panel { padding: 16px 20px; margin-bottom: 18px; }
+    .filter-row-main {
+      display: flex; align-items: center; gap: 12px;
+      flex-wrap: wrap;
+    }
+    .filter-section-label {
+      font-family: var(--font-display);
+      font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--text-muted); font-weight: 700;
+    }
+    .filter-divider {
+      width: 1px; height: 22px;
+      background: var(--border);
+    }
+
+    /* ═══ DROPDOWN ═════════════════════════════════════════════════════ */
+    .dropdown { position: relative; display: inline-block; }
+    .dropdown-trigger {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      padding: 8px 12px 8px 14px;
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--font-display);
+      font-size: 12px; font-weight: 600;
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all .12s;
+      min-width: 200px;
+      justify-content: space-between;
+    }
+    .dropdown-trigger:hover {
+      border-color: var(--border-strong);
+      background: var(--bg-hover);
+    }
+    .dropdown.open .dropdown-trigger {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      box-shadow: 0 0 0 3px var(--accent-mid);
+    }
+    .dropdown.has-selection .dropdown-trigger {
+      border-color: var(--accent);
+      color: var(--accent-dark);
+    }
+    .dropdown-label-wrap { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .dropdown-label-text {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .dropdown-badge {
+      background: var(--accent);
+      color: #fff;
+      border-radius: 999px;
+      padding: 1px 8px;
+      font-size: 10px; font-weight: 700;
+      min-width: 20px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+    .dropdown-badge[hidden] { display: none; }
+    .dropdown-arrow {
+      font-size: 9px; color: var(--text-muted);
+      transition: transform .15s;
+      flex-shrink: 0;
+    }
+    .dropdown.open .dropdown-arrow { transform: rotate(180deg); color: var(--accent); }
+
+    .dropdown-panel {
+      position: absolute;
+      top: calc(100% + 6px); left: 0;
+      width: 320px;
+      max-height: 460px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      box-shadow: var(--shadow-lg);
+      z-index: 100;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .dropdown.open .dropdown-panel { display: flex; }
+    .dropdown-search { padding: 10px; border-bottom: 1px solid var(--border); }
+    .dropdown-search input {
+      width: 100%;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      padding: 7px 11px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-primary);
+      outline: none;
+      transition: all .15s;
+    }
+    .dropdown-search input::placeholder { color: var(--text-muted); }
+    .dropdown-search input:focus {
+      border-color: var(--accent);
+      background: #fff;
+    }
+    .dropdown-options {
+      overflow: auto; flex: 1;
+      padding: 4px 0;
+      scrollbar-width: thin;
+    }
+    .dropdown-options::-webkit-scrollbar { width: 6px; }
+    .dropdown-options::-webkit-scrollbar-thumb {
+      background: var(--border-strong); border-radius: 3px;
+    }
+    .dropdown-option {
+      display: grid;
+      grid-template-columns: 18px 1fr auto;
+      gap: 10px; align-items: center;
+      padding: 7px 14px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background .1s;
+      user-select: none;
+    }
+    .dropdown-option:hover { background: var(--bg-elev); }
+    .dropdown-option .checkmark {
+      width: 16px; height: 16px;
+      border: 1.5px solid var(--border-strong);
+      border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      color: transparent;
+      font-size: 11px; font-weight: 700;
+      transition: all .1s;
+      flex-shrink: 0;
+    }
+    .dropdown-option.selected .checkmark {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .dropdown-option.pos .label { color: var(--success); font-weight: 500; }
+    .dropdown-option.neg .label { color: var(--danger);  font-weight: 500; }
+    .dropdown-option.pos.selected .checkmark {
+      background: var(--success); border-color: var(--success);
+    }
+    .dropdown-option.neg.selected .checkmark {
+      background: var(--danger); border-color: var(--danger);
+    }
+    .dropdown-option .label {
+      color: var(--text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      font-family: var(--font-mono);
+    }
+    .dropdown-option .count {
+      color: var(--text-muted);
+      font-size: 11px; font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .dropdown-empty {
+      padding: 24px 16px; text-align: center;
+      color: var(--text-muted); font-size: 12px;
+    }
+    .dropdown-footer {
+      padding: 8px 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--bg-subtle);
+    }
+    .dropdown-clear {
+      background: none; border: none;
+      color: var(--text-soft);
+      cursor: pointer;
+      font-family: var(--font-display);
+      font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .06em;
+      padding: 4px 8px; border-radius: 4px;
+      transition: all .1s;
+    }
+    .dropdown-clear:hover { color: var(--danger); background: var(--danger-soft); }
+    .dropdown-clear:disabled { opacity: .35; cursor: default; }
+    .dropdown-clear:disabled:hover { color: var(--text-soft); background: none; }
+    .dropdown-info {
+      color: var(--text-muted);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      font-family: var(--font-display); font-weight: 600;
+    }
+
+    /* ═══ Чипы (для года) ══════════════════════════════════════════════ */
+    .chip-group { display: flex; flex-wrap: wrap; gap: 5px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 11px;
+      background: var(--bg-elev);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 11px; font-family: var(--font-mono);
+      color: var(--text-secondary);
+      cursor: pointer; transition: all .12s;
+      user-select: none; white-space: nowrap;
+    }
+    .chip:hover {
+      background: var(--bg-hover);
+      border-color: var(--border-strong);
+      color: var(--text-primary);
+    }
+    .chip.active {
+      background: var(--accent);
+      border-color: var(--accent-dark);
+      color: #fff;
+      box-shadow: 0 2px 6px rgba(8,145,178,.3);
+    }
+    .chip .chip-count {
+      font-size: 10px; font-weight: 700; opacity: .65;
+      padding-left: 4px; border-left: 1px solid currentColor;
+      font-variant-numeric: tabular-nums;
+    }
+    .chip.active .chip-count { opacity: .9; }
+
+    /* ═══ Поиск и сброс ════════════════════════════════════════════════ */
+    .search-row {
+      display: flex; gap: 10px; align-items: center;
+      margin-top: 14px; padding-top: 14px;
+      border-top: 1px dashed var(--border);
+    }
+    #search {
+      flex: 1;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      padding: 10px 14px;
+      color: var(--text-primary);
+      font-family: var(--font-mono); font-size: 13px;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    #search::placeholder { color: var(--text-muted); }
+    #search:focus {
+      outline: none;
+      border-color: var(--accent);
+      background: #fff;
+      box-shadow: 0 0 0 3px var(--accent-mid);
+    }
+    .clear-filters {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      color: var(--text-soft);
+      font-family: var(--font-display);
+      font-size: 11px; font-weight: 700;
+      padding: 10px 14px;
+      cursor: pointer; transition: all .15s;
+      letter-spacing: .04em; text-transform: uppercase;
+    }
+    .clear-filters:hover {
+      color: var(--danger);
+      border-color: var(--danger);
+      background: var(--danger-soft);
+    }
+    .clear-filters[hidden] { display: none; }
+
+    /* ═══ Donut ════════════════════════════════════════════════════════ */
+    .charts-grid {
+      display: grid; gap: 14px; margin-bottom: 18px;
+      grid-template-columns: minmax(280px, 1fr);
+    }
+    .donut-svg { flex-shrink: 0; }
+    .donut-center {
+      font-family: var(--font-display); font-weight: 800;
+      fill: var(--text-primary); font-size: 24px;
+      letter-spacing: -.02em;
+    }
+    .donut-center-label {
+      fill: var(--text-muted); font-size: 9px;
+      letter-spacing: .12em; text-transform: uppercase; font-weight: 700;
+      font-family: var(--font-display);
+    }
+    .donut-hint {
+      font-size: 10px; color: var(--text-muted);
+      font-family: var(--font-display); font-weight: 600;
+      letter-spacing: .04em;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--border);
+    }
+    .legend {
+      flex: 1; min-width: 220px;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 4px;
+    }
+    .legend-row {
+      display: grid;
+      grid-template-columns: 16px 10px 1fr auto;
+      gap: 9px;
+      align-items: center;
+      font-size: 12px; cursor: pointer;
+      padding: 6px 10px; border-radius: var(--r-sm);
+      transition: background .12s;
+      user-select: none;
+    }
+    .legend-row:hover { background: var(--bg-elev); }
+    .legend-row.selected { background: var(--accent-soft); }
+    .legend-row.dimmed { opacity: .45; }
+    .legend-check {
+      width: 14px; height: 14px;
+      border: 1.5px solid var(--border-strong);
+      border-radius: 3px;
+      display: flex; align-items: center; justify-content: center;
+      color: transparent;
+      font-size: 10px; font-weight: 700;
+      transition: all .1s;
+    }
+    .legend-row.selected .legend-check {
+      background: var(--accent); border-color: var(--accent); color: #fff;
+    }
+    .legend-swatch {
+      width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0;
+    }
+    .legend-label {
+      color: var(--text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .legend-value {
+      color: var(--text-soft); font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ═══ РЕЙТИНГИ ═════════════════════════════════════════════════════ */
+    .rating-grid {
+      display: grid; gap: 14px; margin-bottom: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+    }
+    @media (max-width: 1000px) {
+      .rating-grid { grid-template-columns: 1fr; }
+    }
+    .rating-card { position: relative; padding: 18px 20px; }
+    .rating-card::before {
+      content: ''; position: absolute; top: 0; left: 0;
+      width: 4px; height: 100%; border-radius: var(--r) 0 0 var(--r);
+    }
+    .rating-card.pos::before { background: var(--success); }
+    .rating-card.neg::before { background: var(--danger); }
+
+    .rating-header { margin-bottom: 14px; }
+    .rating-title {
+      font-family: var(--font-display);
+      font-weight: 800; font-size: 17px;
+      letter-spacing: -.02em;
+      margin-bottom: 4px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .rating-card.pos .rating-title { color: var(--success); }
+    .rating-card.neg .rating-title { color: var(--danger); }
+    .rating-subtitle {
+      font-family: var(--font-display);
+      font-size: 11px; color: var(--text-muted);
+      letter-spacing: .04em; text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .rating-controls {
+      display: flex; flex-wrap: wrap; gap: 10px;
+      align-items: center;
+      padding: 10px 0;
+      margin-bottom: 10px;
+      border-bottom: 1px dashed var(--border);
+    }
+    .rating-controls .dropdown-trigger { min-width: 170px; }
+    .rating-controls .dropdown-panel { width: 280px; }
+
+    /* Метрические табы */
+    .metric-tabs {
+      display: inline-flex;
+      background: var(--bg-elev);
+      border-radius: var(--r-sm);
+      padding: 3px;
+      gap: 2px;
+    }
+    .metric-tab {
+      background: none; border: none;
+      padding: 6px 12px;
+      font-family: var(--font-display);
+      font-size: 11px; font-weight: 600;
+      color: var(--text-soft);
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all .15s;
+      letter-spacing: .02em;
+    }
+    .metric-tab:hover { color: var(--text-primary); }
+    .metric-tab.active {
+      background: var(--bg-card);
+      color: var(--accent);
+      box-shadow: 0 1px 3px rgba(15,23,42,.08);
+      font-weight: 700;
+    }
+
+    /* Стат по верхним показателям над списком */
+    .rating-summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .rating-stat {
+      background: var(--bg-subtle);
+      border-radius: var(--r-sm);
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+    }
+    .rating-stat-label {
+      font-family: var(--font-display);
+      font-size: 9px; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--text-muted); font-weight: 700;
+    }
+    .rating-stat-value {
+      font-family: var(--font-display);
+      font-size: 15px; font-weight: 800;
+      color: var(--text-primary);
+      margin-top: 2px;
+      letter-spacing: -.02em;
+      font-variant-numeric: tabular-nums;
+    }
+    .rating-stat-unit {
+      font-size: 11px; color: var(--text-soft); font-weight: 600;
+    }
+
+    /* Список баров — прокручиваемый */
+    .bar-list {
+      display: flex; flex-direction: column; gap: 8px;
+      max-height: 420px;
+      overflow-y: auto;
+      padding-right: 4px;
+      scrollbar-width: thin;
+    }
+    .bar-list::-webkit-scrollbar { width: 6px; }
+    .bar-list::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: minmax(110px, 1.1fr) 2fr minmax(85px, auto);
+      gap: 10px; align-items: center;
+      cursor: pointer;
+      padding: 6px 6px; border-radius: var(--r-sm);
+      transition: background .12s;
+    }
+    .bar-row:hover { background: var(--bg-elev); }
+    .bar-row.active { background: var(--accent-soft); }
+    .bar-name {
+      color: var(--text-primary); font-weight: 600; font-size: 12px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      font-family: var(--font-display);
+    }
+    .bar-rank {
+      display: inline-block;
+      font-family: var(--font-display);
+      font-size: 10px; font-weight: 700;
+      color: var(--text-muted);
+      min-width: 18px;
+      font-variant-numeric: tabular-nums;
+      margin-right: 4px;
+    }
+    .bar-track {
+      height: 10px;
+      background: var(--bg-elev);
+      border-radius: 5px;
+      overflow: hidden;
+      position: relative;
+    }
+    .bar-fill {
+      height: 100%; border-radius: 5px;
+      transition: width .5s cubic-bezier(.4,0,.2,1);
+    }
+    .bar-fill.pos { background: linear-gradient(90deg, #10b981, #34d399); }
+    .bar-fill.neg { background: linear-gradient(90deg, #dc2626, #f59e0b); }
+
+    .bar-values {
+      text-align: right;
+      font-family: var(--font-display);
+      line-height: 1.25;
+    }
+    .bar-primary {
+      font-size: 13px; font-weight: 800;
+      color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -.01em;
+    }
+    .bar-primary .unit {
+      font-size: 10px; font-weight: 600;
+      color: var(--text-soft);
+      margin-left: 2px;
+    }
+    .bar-secondary {
+      font-size: 10px; color: var(--text-muted);
+      font-weight: 500;
+      margin-top: 1px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .rating-empty {
+      text-align: center; padding: 24px 12px;
+      color: var(--text-muted); font-size: 12px;
+    }
+
+    /* ═══ Активные фильтры (теги над таблицей) ═══════════════════════ */
+    .active-filters {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      align-items: center;
+      margin-bottom: 12px;
+      padding: 12px 16px;
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-mid);
+      border-radius: var(--r);
+      animation: slideUp .25s ease both;
+    }
+    .active-filters-label {
+      font-family: var(--font-display);
+      font-size: 11px; font-weight: 700;
+      color: var(--accent-dark);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      margin-right: 6px;
+    }
+    .active-tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px 4px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--accent);
+      border-radius: 999px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--accent-dark);
+      font-weight: 600;
+      cursor: default;
+      transition: all .12s;
+      box-shadow: 0 1px 3px rgba(8,145,178,.12);
+    }
+    .active-tag .tag-group {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      font-family: var(--font-display);
+    }
+    .active-tag .tag-remove {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--accent-mid);
+      color: var(--accent-dark);
+      font-size: 10px;
+      cursor: pointer;
+      transition: all .12s;
+      border: none;
+      font-weight: 700;
+      padding: 0;
+      line-height: 1;
+    }
+    .active-tag .tag-remove:hover {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    /* ═══ ТАБЛИЦА ══════════════════════════════════════════════════════ */
+    .row-count {
+      font-size: 11px; color: var(--text-muted);
+      margin-bottom: 10px; letter-spacing: .04em; padding: 0 4px;
+    }
+    .row-count strong {
+      color: var(--accent); font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .table-wrap {
+      width: 100%; overflow: auto;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      box-shadow: var(--shadow);
+      max-height: 70vh;
+    }
+    table { width: 100%; border-collapse: collapse; min-width: 600px; }
+    thead tr {
+      background: var(--bg-subtle);
+      position: sticky; top: 0; z-index: 2;
+    }
+    th {
+      padding: 12px 14px;
+      text-align: left;
+      font-family: var(--font-display);
+      font-size: 10px; font-weight: 700;
+      letter-spacing: .08em; text-transform: uppercase;
+      color: var(--text-soft);
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap; user-select: none;
+      cursor: pointer; transition: background .12s, color .12s;
+    }
+    th:hover { background: var(--bg-elev); color: var(--accent); }
+    th:not(:last-child) { border-right: 1px solid var(--border); }
+    th .sort-ind {
+      display: inline-block; margin-left: 6px;
+      color: var(--text-muted); font-size: 9px;
+      transition: color .12s;
+    }
+    th.sorted, th.sorted .sort-ind { color: var(--accent); }
+    th.numeric { text-align: right; }
+
+    tbody tr {
+      transition: background .1s;
+      border-bottom: 1px solid var(--border);
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:nth-child(even) { background: var(--bg-subtle); }
+    tbody tr:hover { background: var(--accent-soft); }
+    td {
+      padding: 10px 14px;
+      color: var(--text-primary);
+      white-space: nowrap;
+      max-width: 340px; overflow: hidden; text-overflow: ellipsis;
+      font-size: 12px;
+    }
+    td:not(:last-child) { border-right: 1px solid var(--border); }
+    td.row-num {
+      color: var(--text-muted); font-size: 11px;
+      min-width: 40px; text-align: right; user-select: none;
+      font-variant-numeric: tabular-nums;
+    }
+    td.numeric { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .status-badge {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 11px; font-weight: 600;
+      background: var(--bg-elev);
+      color: var(--text-secondary);
+    }
+    .status-badge.pos { background: var(--success-soft); color: #065f46; }
+    .status-badge.neg { background: var(--danger-soft);  color: #991b1b; }
+
+    .empty-state {
+      text-align: center; padding: 50px 20px;
+      color: var(--text-muted);
+    }
+    .empty-state .icon { font-size: 32px; margin-bottom: 10px; }
+
+    footer {
+      margin-top: 28px; text-align: center;
+      font-size: 10px; color: var(--text-muted);
+      letter-spacing: .05em;
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .kpi-card, .card { animation: slideUp .35s ease both; }
+    .kpi-card:nth-child(2) { animation-delay: .04s; }
+    .kpi-card:nth-child(3) { animation-delay: .08s; }
+    .kpi-card:nth-child(4) { animation-delay: .12s; }
+
+    @media (max-width: 700px) {
+      header.top { flex-direction: column; align-items: flex-start; }
+      .meta { gap: 10px; }
+      .dropdown-trigger { min-width: 0; }
+      .dropdown-panel { width: 280px; }
+      .rating-summary { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ═══ Шапка ═══════════════════════════════════════════════════════ -->
+  <header class="top">
+    <div class="logo-block">
+      <div class="pulse-dot"></div>
+      <h1>DATA <span>STREAM</span></h1>
+    </div>
+    <div class="meta">
+      <div class="spinner" id="spinner"></div>
+      <span id="status-icon" class="status-ok" title="Статус">●</span>
+      <div class="meta-item"><span>Обновлено</span><span class="value" id="last-update">—</span></div>
+      <div class="meta-item"><span>Интервал</span><span class="value">60 сек</span></div>
+      <div class="meta-item"><span>До обновления</span><span class="value" id="next-update">—</span></div>
+    </div>
+  </header>
+
+  <div id="error-bar">
+    <span>⚠</span>
+    <span id="error-msg">Ошибка загрузки данных</span>
+    <span class="ml-auto">Отображены данные предыдущего запроса</span>
+  </div>
+
+  <!-- ═══ KPI ═════════════════════════════════════════════════════════ -->
+  <section class="kpi-grid" id="kpi-grid"></section>
+
+  <!-- ═══ Фильтры ═════════════════════════════════════════════════════ -->
+  <section class="card filter-panel">
+    <div class="filter-row-main" id="filter-row"></div>
+    <div class="search-row">
+      <input id="search" type="text" placeholder="🔍  Поиск по таблице…" autocomplete="off" />
+      <button class="clear-filters" id="clear-filters" hidden>× Сбросить всё</button>
+    </div>
+  </section>
+
+  <!-- ═══ Donut ═══════════════════════════════════════════════════════ -->
+  <section class="charts-grid" id="charts-grid"></section>
+
+  <!-- ═══ Рейтинги ════════════════════════════════════════════════════ -->
+  <section class="rating-grid" id="rating-grid"></section>
+
+  <!-- ═══ Таблица ═════════════════════════════════════════════════════ -->
+  <div id="active-filters"></div>
+  <div class="row-count" id="row-count"></div>
+  <div class="table-wrap" id="table-wrap">
+    <table id="data-table">
+      <thead id="table-head"></thead>
+      <tbody id="table-body">
+        <tr><td colspan="999">
+          <div class="empty-state">
+            <div class="icon">⌛</div>
+            <div>Загрузка данных…</div>
+          </div>
+        </td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer>Источник: Google Таблицы · Автообновление каждые 60 секунд</footer>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   КОНФИГ
+   ═══════════════════════════════════════════════════════════════════════ */
+const CSV_URL =
+  'https://docs.google.com/spreadsheets/d/e/2PACX-1vR0WE7EQQGvgGEgNyP-uXDNG7pGjspEVn-5IFc5mk0NfnKQ9fTstE_2ypUg7b2y064OgwkOtmwrLdG8/pub?output=csv';
+
+const REFRESH_INTERVAL = 60_000;
+
+// Позитивные / негативные статусы (нижний регистр, обрезанные пробелы)
+const POSITIVE_STATUSES = [
+  'контракт заключен',
+  'не подлежит сносу',
+  'опубликовано',
+  'снесен',
+  'снос своими силами',
+];
+const NEGATIVE_STATUSES = [
+  'запрет',
+  'наследство',
+  'подлежит расселению',
+  'публикация',
+  'расселен',
+  'розыск',
+  'сво',
+  'суд',
+];
+const POS_SET = new Set(POSITIVE_STATUSES);
+const NEG_SET = new Set(NEGATIVE_STATUSES);
+
+// Палитра для donut'а
+const PALETTE = ['#0891b2','#10b981','#f59e0b','#ec4899','#8b5cf6','#14b8a6','#ef4444','#6366f1','#84cc16','#f97316','#06b6d4','#a855f7'];
+
+// Метрики для рейтинга
+const RATING_METRICS = [
+  { id: 'count',  label: 'Кол-во',    short: 'шт.' },
+  { id: 'volume', label: 'Объём',     short: 'м³'  },
+  { id: 'cost',   label: 'Стоимость', short: '₽'   },
+];
+
+/* ═══════════════════════════════════════════════════════════════════════
+   СОСТОЯНИЕ
+   ═══════════════════════════════════════════════════════════════════════ */
+const state = {
+  headers: [],
+  rows: [],
+  numericCols: new Set(),
+
+  districtCol: -1,
+  statusCol:   -1,
+  yearCol:     -1,
+  volumeCol:   -1,
+  costCol:     -1,
+
+  // Глобальные фильтры: colIdx → Set<value>
+  filters: new Map(),
+  search:  '',
+
+  // Локальные фильтры для рейтингов
+  ratingStatuses:     new Set(POSITIVE_STATUSES),
+  antiRatingStatuses: new Set(NEGATIVE_STATUSES),
+
+  // Метрика по умолчанию для каждого рейтинга
+  ratingMetric:     'count',
+  antiRatingMetric: 'count',
+
+  // Сортировка таблицы
+  sortCol: null,
+  sortDir: 'asc',
+};
+
+/* ═══════════════════════════════════════════════════════════════════════
+   DOM
+   ═══════════════════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+const elSpinner  = $('spinner');
+const elStatus   = $('status-icon');
+const elLastUpd  = $('last-update');
+const elNextUpd  = $('next-update');
+const elErrBar   = $('error-bar');
+const elErrMsg   = $('error-msg');
+const elKpiGrid  = $('kpi-grid');
+const elFilterRow= $('filter-row');
+const elSearch   = $('search');
+const elClearBtn = $('clear-filters');
+const elCharts   = $('charts-grid');
+const elRating   = $('rating-grid');
+const elRowCount      = $('row-count');
+const elActiveFilters = $('active-filters');
+const elTableWrap     = $('table-wrap');
+const elHead     = $('table-head');
+const elBody     = $('table-body');
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CSV-ПАРСЕР (кавычки, "" экранирование, CRLF/LF)
+   ═══════════════════════════════════════════════════════════════════════ */
+function parseCSV(text) {
+  const rows = []; let row = []; let cell = ''; let inQuote = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i], next = text[i + 1];
+    if (inQuote) {
+      if      (ch === '"' && next === '"') { cell += '"'; i++; }
+      else if (ch === '"')                  inQuote = false;
+      else                                  cell += ch;
+    } else {
+      if      (ch === '"')                  inQuote = true;
+      else if (ch === ',')                  { row.push(cell.trim()); cell = ''; }
+      else if (ch === '\r' && next === '\n'){ row.push(cell.trim()); rows.push(row); row=[]; cell=''; i++; }
+      else if (ch === '\n')                 { row.push(cell.trim()); rows.push(row); row=[]; cell=''; }
+      else                                  cell += ch;
+    }
+  }
+  if (cell.length || row.length) { row.push(cell.trim()); rows.push(row); }
+  while (rows.length && rows[rows.length - 1].every(c => c === '')) rows.pop();
+  return rows;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   УТИЛИТЫ
+   ═══════════════════════════════════════════════════════════════════════ */
+function toNumber(val) {
+  if (val == null || val === '') return null;
+  const cleaned = String(val).replace(/\s/g, '').replace(',', '.');
+  if (!/^-?\d+(\.\d+)?$/.test(cleaned)) return null;
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? null : n;
+}
+
+function detectNumericCols(headers, rows) {
+  const set = new Set();
+  headers.forEach((_, idx) => {
+    let total = 0, numCount = 0;
+    for (const r of rows) {
+      const v = r[idx];
+      if (v == null || v === '') continue;
+      total++;
+      if (toNumber(v) !== null) numCount++;
+    }
+    if (total > 0 && numCount / total >= 0.8) set.add(idx);
+  });
+  return set;
+}
+
+function findColumn(...needles) {
+  for (const n of needles) {
+    const lc = n.toLowerCase();
+    const idx = state.headers.findIndex(h => h && h.toLowerCase().includes(lc));
+    if (idx >= 0) return idx;
+  }
+  return -1;
+}
+
+const fmtFull = n => n == null
+  ? '—'
+  : new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(n);
+
+// Раздельно число и единицу — чтобы единицу можно было оформить мельче
+function fmtShortParts(n) {
+  if (n == null) return { num: '—', unit: '' };
+  const abs = Math.abs(n);
+  if (abs >= 1e9) return { num: (n / 1e9).toFixed(2).replace('.', ','), unit: ' млрд' };
+  if (abs >= 1e6) return { num: (n / 1e6).toFixed(2).replace('.', ','), unit: ' млн'  };
+  if (abs >= 1e3) return { num: (n / 1e3).toFixed(1).replace('.', ','), unit: ' тыс'  };
+  return { num: new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(n), unit: '' };
+}
+
+function fmtShort(n) {
+  const p = fmtShortParts(n);
+  return p.num + p.unit;
+}
+
+const escHtml = s => String(s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+  .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function pluralRow(n) {
+  const v = n % 100; if (v >= 11 && v <= 19) return 'строк';
+  const r = v % 10;  if (r === 1) return 'строка';
+  if (r >= 2 && r <= 4) return 'строки';
+  return 'строк';
+}
+
+const norm = v => String(v || '').toLowerCase().trim();
+
+function statusKind(status) {
+  const s = norm(status);
+  if (POS_SET.has(s)) return 'pos';
+  if (NEG_SET.has(s)) return 'neg';
+  return '';
+}
+
+function statusColor(status, fallbackIdx = 0) {
+  const s = norm(status);
+  if (POS_SET.has(s)) {
+    const greens = ['#059669','#10b981','#22c55e','#34d399','#6ee7b7'];
+    return greens[POSITIVE_STATUSES.indexOf(s) % greens.length];
+  }
+  if (NEG_SET.has(s)) {
+    const reds = ['#dc2626','#ef4444','#f87171','#fb923c','#f59e0b','#fbbf24','#a855f7','#ec4899'];
+    return reds[NEGATIVE_STATUSES.indexOf(s) % reds.length];
+  }
+  return PALETTE[fallbackIdx % PALETTE.length];
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ФИЛЬТРАЦИЯ / СОРТИРОВКА
+   ═══════════════════════════════════════════════════════════════════════ */
+function applyFilters(rows, exceptCol = null) {
+  const q = state.search.toLowerCase().trim();
+  return rows.filter(r => {
+    for (const [col, set] of state.filters) {
+      if (col === exceptCol) continue;
+      const v = (r[col] || '').trim() || '—';
+      if (!set.has(v)) return false;
+    }
+    if (q && !r.some(c => String(c).toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+
+function applySort(rows) {
+  if (state.sortCol == null) return rows;
+  const col = state.sortCol;
+  const isNum = state.numericCols.has(col);
+  const sign = state.sortDir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const va = a[col] || '', vb = b[col] || '';
+    if (isNum) {
+      const na = toNumber(va), nb = toNumber(vb);
+      if (na == null && nb == null) return 0;
+      if (na == null) return 1;
+      if (nb == null) return -1;
+      return (na - nb) * sign;
+    }
+    return va.localeCompare(vb, 'ru') * sign;
+  });
+}
+
+function toggleFilter(colIdx, value) {
+  if (!state.filters.has(colIdx)) state.filters.set(colIdx, new Set());
+  const set = state.filters.get(colIdx);
+  if (set.has(value)) set.delete(value); else set.add(value);
+  if (set.size === 0) state.filters.delete(colIdx);
+
+  // Если изменился фильтр по статусу — обновляем состояние рейтинговых чекбоксов
+  if (colIdx === state.statusCol) {
+    syncGlobalFilterToRatingStatuses();
+  }
+
+  onFiltersChanged();
+}
+
+function clearAllFilters() {
+  state.filters.clear();
+  state.search = '';
+  elSearch.value = '';
+  closeAllDropdowns();
+  // Вернуть все статусы в рейтинги
+  state.ratingStatuses     = new Set(POSITIVE_STATUSES);
+  state.antiRatingStatuses = new Set(NEGATIVE_STATUSES);
+  onFiltersChanged();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   СИНХРОНИЗАЦИЯ: рейтинговые чекбоксы ↔ глобальный фильтр по статусам
+   ═══════════════════════════════════════════════════════════════════════ */
+// Рейтинг → глобальный фильтр
+// Вызывается когда пользователь (сн)ял галочку в dropdown'е рейтинга
+function syncRatingStatusesToGlobalFilter() {
+  if (state.statusCol < 0) return;
+  const combined = new Set([...state.ratingStatuses, ...state.antiRatingStatuses]);
+  const all = [...POSITIVE_STATUSES, ...NEGATIVE_STATUSES];
+  const allSelected = all.every(s => combined.has(s));
+
+  if (allSelected) {
+    // Все галочки стоят → убираем фильтр (показать всё)
+    state.filters.delete(state.statusCol);
+  } else if (combined.size === 0) {
+    // Все сняты → показать пустую таблицу
+    state.filters.set(state.statusCol, new Set(['__нет_совпадений__']));
+  } else {
+    // Конвертируем lowercase → оригинальный регистр из данных
+    const actualValues = new Set();
+    for (const s of combined) {
+      const actual = (state.statusCaseMap || new Map()).get(s);
+      if (actual) actualValues.add(actual);
+    }
+    if (actualValues.size > 0) {
+      state.filters.set(state.statusCol, actualValues);
+    }
+  }
+}
+
+// Глобальный фильтр → рейтинг
+// Вызывается когда пользователь кликнул в donut'е или глобальном dropdown'е
+function syncGlobalFilterToRatingStatuses() {
+  const activeFilter = state.filters.get(state.statusCol);
+  if (!activeFilter) {
+    // Фильтр снят = показать всё = все галочки стоят
+    state.ratingStatuses     = new Set(POSITIVE_STATUSES);
+    state.antiRatingStatuses = new Set(NEGATIVE_STATUSES);
+  } else {
+    // Оставляем в рейтинге только то, что есть в глобальном фильтре
+    const lowered = new Set([...activeFilter].map(v => norm(v)));
+    state.ratingStatuses     = new Set(POSITIVE_STATUSES.filter(s => lowered.has(s)));
+    state.antiRatingStatuses = new Set(NEGATIVE_STATUSES.filter(s => lowered.has(s)));
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   DROPDOWN — компонент, переиспользуемый для всех выпадающих списков
+   ═══════════════════════════════════════════════════════════════════════ */
+function closeAllDropdowns() {
+  document.querySelectorAll('.dropdown.open').forEach(d => d.classList.remove('open'));
+}
+// Глобально: закрываем открытые dropdown'ы при клике вне них
+document.addEventListener('click', e => {
+  if (!e.target.closest('.dropdown')) closeAllDropdowns();
+});
+
+/**
+ * Универсальный dropdown с множественным выбором.
+ * Возвращает { el, refresh } — refresh() обновляет содержимое БЕЗ закрытия.
+ *
+ * opts:
+ *   label        — текст триггера
+ *   getOptions() — возвращает массив [value, count]
+ *   getSelected()— возвращает Set выбранных значений
+ *   onToggle(v)  — клик по опции
+ *   onClear()    — кнопка «Очистить»
+ *   showSearch   — показывать ли поиск внутри
+ *   colorize     — раскрашивать ли опции по знаку статуса (pos/neg)
+ *   width        — ширина панели (по умолчанию 320)
+ */
+function createDropdown(opts) {
+  const {
+    label, getOptions, getSelected, onToggle, onClear,
+    showSearch = false, colorize = false, width = 320,
+  } = opts;
+
+  let searchQuery = '';
+
+  const container = document.createElement('div');
+  container.className = 'dropdown';
+  container.innerHTML = `
+    <button class="dropdown-trigger" type="button">
+      <span class="dropdown-label-wrap">
+        <span class="dropdown-label-text">${escHtml(label)}</span>
+        <span class="dropdown-badge" hidden>0</span>
+      </span>
+      <span class="dropdown-arrow">▼</span>
+    </button>
+    <div class="dropdown-panel" style="width:${width}px">
+      ${showSearch ? `
+        <div class="dropdown-search">
+          <input type="text" placeholder="🔍  Поиск..." autocomplete="off" />
+        </div>` : ''}
+      <div class="dropdown-options"></div>
+      <div class="dropdown-footer">
+        <button class="dropdown-clear" type="button">Очистить</button>
+        <span class="dropdown-info"></span>
+      </div>
+    </div>
+  `;
+
+  const trigger     = container.querySelector('.dropdown-trigger');
+  const badge       = container.querySelector('.dropdown-badge');
+  const panel       = container.querySelector('.dropdown-panel');
+  const optionsEl   = container.querySelector('.dropdown-options');
+  const clearBtn    = container.querySelector('.dropdown-clear');
+  const infoEl      = container.querySelector('.dropdown-info');
+  const searchInput = showSearch ? container.querySelector('.dropdown-search input') : null;
+
+  function refresh() {
+    const allOptions = getOptions();
+    const selected = getSelected();
+    const q = searchQuery.toLowerCase().trim();
+    const filtered = q
+      ? allOptions.filter(([v]) => String(v).toLowerCase().includes(q))
+      : allOptions;
+
+    if (filtered.length === 0) {
+      optionsEl.innerHTML = `<div class="dropdown-empty">Ничего не найдено</div>`;
+    } else {
+      optionsEl.innerHTML = filtered.map(([v, cnt]) => {
+        const kind = colorize ? statusKind(v) : '';
+        const isSel = selected.has(v);
+        return `
+          <div class="dropdown-option ${kind} ${isSel ? 'selected' : ''}"
+               data-val="${escHtml(v)}">
+            <span class="checkmark">✓</span>
+            <span class="label" title="${escHtml(v)}">${escHtml(v)}</span>
+            <span class="count">${cnt}</span>
+          </div>`;
+      }).join('');
+
+      optionsEl.querySelectorAll('.dropdown-option').forEach(opt => {
+        opt.addEventListener('click', () => onToggle(opt.dataset.val));
+      });
+    }
+
+    // Бейдж и нижняя строка
+    if (selected.size === 0) {
+      badge.hidden = true;
+      container.classList.remove('has-selection');
+      clearBtn.disabled = true;
+    } else {
+      badge.hidden = false;
+      badge.textContent = selected.size;
+      container.classList.add('has-selection');
+      clearBtn.disabled = false;
+    }
+    infoEl.textContent = `${selected.size} из ${allOptions.length}`;
+  }
+
+  // Открыть / закрыть
+  trigger.addEventListener('click', e => {
+    e.stopPropagation();
+    const wasOpen = container.classList.contains('open');
+    closeAllDropdowns();
+    if (!wasOpen) {
+      container.classList.add('open');
+      if (searchInput) setTimeout(() => searchInput.focus(), 30);
+    }
+  });
+  panel.addEventListener('click', e => e.stopPropagation());
+
+  // Поиск
+  if (searchInput) {
+    searchInput.addEventListener('input', e => {
+      searchQuery = e.target.value;
+      refresh();
+    });
+  }
+
+  // Очистить
+  clearBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (onClear) onClear();
+  });
+
+  refresh();
+  return { el: container, refresh };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ГЛОБАЛЬНЫЕ КОЛЛБЭКИ ПЕРЕРИСОВКИ
+   После любого изменения фильтров вызываем onFiltersChanged(),
+   которая обновляет все компоненты IN-PLACE (без закрытия dropdown'ов).
+   ═══════════════════════════════════════════════════════════════════════ */
+const refreshCallbacks = [];
+
+function onFiltersChanged(scroll = true) {
+  renderKPIs();
+  renderDonut();
+  renderActiveFilters();
+  renderTable();
+  refreshCallbacks.forEach(fn => fn());
+  elClearBtn.hidden = !(state.filters.size > 0 || state.search);
+
+  // Прокрутить к таблице, чтобы пользователь увидел отфильтрованные результаты
+  if (scroll && (state.filters.size > 0 || state.search)) {
+    elActiveFilters.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   РЕНДЕР: АКТИВНЫЕ ФИЛЬТРЫ (теги над таблицей)
+   Показывают пользователю какие фильтры сейчас применены к таблице
+   ═══════════════════════════════════════════════════════════════════════ */
+function renderActiveFilters() {
+  const hasFilters = state.filters.size > 0 || state.search;
+  if (!hasFilters) {
+    elActiveFilters.innerHTML = '';
+    return;
+  }
+
+  const colNames = {};
+  if (state.districtCol >= 0) colNames[state.districtCol] = 'Округ';
+  if (state.statusCol >= 0)   colNames[state.statusCol]   = 'Статус';
+  if (state.yearCol >= 0)     colNames[state.yearCol]     = 'Год';
+
+  const tags = [];
+
+  for (const [col, set] of state.filters) {
+    const group = colNames[col] || state.headers[col] || `Столбец ${col}`;
+    for (const val of set) {
+      tags.push({ col, val, group });
+    }
+  }
+
+  if (state.search) {
+    tags.push({ col: -1, val: state.search, group: 'Поиск' });
+  }
+
+  const filtered = applyFilters(state.rows);
+
+  elActiveFilters.innerHTML = `
+    <div class="active-filters">
+      <span class="active-filters-label">🔽 Фильтры (${filtered.length} ${pluralRow(filtered.length)}):</span>
+      ${tags.map(t => `
+        <span class="active-tag" data-col="${t.col}" data-val="${escHtml(t.val)}">
+          <span class="tag-group">${escHtml(t.group)}:</span>
+          ${escHtml(t.val)}
+          <button class="tag-remove" title="Убрать">×</button>
+        </span>
+      `).join('')}
+    </div>
+  `;
+
+  // Клик по × убирает конкретный фильтр
+  elActiveFilters.querySelectorAll('.tag-remove').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const tag = btn.closest('.active-tag');
+      const col = +tag.dataset.col;
+      const val = tag.dataset.val;
+
+      if (col === -1) {
+        // Убираем поиск
+        state.search = '';
+        elSearch.value = '';
+      } else {
+        // Убираем конкретное значение фильтра
+        const set = state.filters.get(col);
+        if (set) {
+          set.delete(val);
+          if (set.size === 0) state.filters.delete(col);
+        }
+      }
+      onFiltersChanged(false);
+    });
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   РЕНДЕР: KPI
+   ═══════════════════════════════════════════════════════════════════════ */
+function renderKPIs() {
+  const filtered = applyFilters(state.rows);
+  const cards = [];
+
+  // 1. Всего домов
+  cards.push({
+    label: 'Всего домов',
+    parts: { num: fmtFull(filtered.length), unit: '' },
+    sub: filtered.length !== state.rows.length
+      ? `из <b>${fmtFull(state.rows.length)}</b> в источнике`
+      : '',
+    color: PALETTE[0],
+  });
+
+  // 2. Округа — количество уникальных
+  if (state.districtCol >= 0) {
+    const unique = new Set();
+    for (const r of filtered) {
+      const v = (r[state.districtCol] || '').trim();
+      if (v) unique.add(v);
+    }
+    cards.push({
+      label: 'Округа',
+      parts: { num: String(unique.size), unit: '' },
+      sub: '',
+      color: '#8b5cf6',
+    });
+  }
+
+  // 3-4. Числовые колонки (без «№» и без «дотац»)
+  const numCols = [...state.numericCols].filter(idx => {
+    const h = (state.headers[idx] || '').toLowerCase().trim();
+    if (h === '№' || h === 'n' || h === '#') return false;
+    if (h.includes('дотац') || h.includes('год')) return false;
+    return true;
+  }).slice(0, 2);
+
+  numCols.forEach((colIdx, i) => {
+    let sum = 0, cnt = 0;
+    for (const r of filtered) {
+      const n = toNumber(r[colIdx]);
+      if (n != null) { sum += n; cnt++; }
+    }
+    cards.push({
+      label: `Σ  ${state.headers[colIdx]}`,
+      parts: fmtShortParts(sum),
+      sub: '',
+      color: PALETTE[(i + 2) % PALETTE.length],
+    });
+  });
+
+  elKpiGrid.innerHTML = cards.map(c => `
+    <div class="kpi-card" style="--c-accent:${c.color}">
+      <div class="kpi-label">${escHtml(c.label)}</div>
+      <div class="kpi-value">${c.parts.num}${c.parts.unit
+        ? `<span class="kpi-unit">${c.parts.unit}</span>` : ''}</div>
+      ${c.sub ? `<div class="kpi-sub">${c.sub}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   РЕНДЕР: ПАНЕЛЬ ФИЛЬТРОВ
+   ═══════════════════════════════════════════════════════════════════════ */
+function renderFilters() {
+  elFilterRow.innerHTML = '';
+
+  // Лейбл
+  const lbl = document.createElement('span');
+  lbl.className = 'filter-section-label';
+  lbl.textContent = 'Фильтры';
+  elFilterRow.appendChild(lbl);
+
+  // ── Округ ────────────────────────────────────────────────────────────
+  if (state.districtCol >= 0) {
+    const dd = createDropdown({
+      label: 'Городской округ',
+      showSearch: true,
+      width: 320,
+      getOptions: () => {
+        // Подсчёт значений (стабильно, без учёта фильтров)
+        const counts = new Map();
+        for (const r of state.rows) {
+          const v = (r[state.districtCol] || '').trim() || '—';
+          counts.set(v, (counts.get(v) || 0) + 1);
+        }
+        return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+      },
+      getSelected: () => state.filters.get(state.districtCol) || new Set(),
+      onToggle: v => toggleFilter(state.districtCol, v),
+      onClear: () => {
+        if (state.filters.has(state.districtCol)) {
+          state.filters.delete(state.districtCol);
+          onFiltersChanged();
+        }
+      },
+    });
+    elFilterRow.appendChild(dd.el);
+    refreshCallbacks.push(dd.refresh);
+  }
+
+  // ── Статус ───────────────────────────────────────────────────────────
+  if (state.statusCol >= 0) {
+    const dd = createDropdown({
+      label: 'Статус',
+      colorize: true,
+      width: 300,
+      getOptions: () => {
+        const counts = new Map();
+        for (const r of state.rows) {
+          const v = (r[state.statusCol] || '').trim() || '—';
+          counts.set(v, (counts.get(v) || 0) + 1);
+        }
+        return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+      },
+      getSelected: () => state.filters.get(state.statusCol) || new Set(),
+      onToggle: v => toggleFilter(state.statusCol, v),
+      onClear: () => {
+        if (state.filters.has(state.statusCol)) {
+          state.filters.delete(state.statusCol);
+          onFiltersChanged();
+        }
+      },
+    });
+    elFilterRow.appendChild(dd.el);
+    refreshCallbacks.push(dd.refresh);
+  }
+
+  // ── Год — чипы (обычно 1-3 значения, dropdown избыточен) ─────────────
+  if (state.yearCol >= 0) {
+    const div = document.createElement('span');
+    div.className = 'filter-divider';
+    elFilterRow.appendChild(div);
+
+    const yearLbl = document.createElement('span');
+    yearLbl.className = 'filter-section-label';
+    yearLbl.textContent = 'Год дотации';
+    elFilterRow.appendChild(yearLbl);
+
+    const group = document.createElement('div');
+    group.className = 'chip-group';
+    elFilterRow.appendChild(group);
+
+    function rebuildYearChips() {
+      const counts = new Map();
+      for (const r of state.rows) {
+        const v = (r[state.yearCol] || '').trim() || '—';
+        counts.set(v, (counts.get(v) || 0) + 1);
+      }
+      const entries = [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+      const active = state.filters.get(state.yearCol) || new Set();
+
+      group.innerHTML = entries.map(([v, cnt]) => {
+        const isActive = active.has(v);
+        return `<button class="chip ${isActive ? 'active' : ''}" data-val="${escHtml(v)}">
+                  ${escHtml(v)}<span class="chip-count">${cnt}</span>
+                </button>`;
+      }).join('');
+      group.querySelectorAll('.chip').forEach(chip => {
+        chip.addEventListener('click', () => toggleFilter(state.yearCol, chip.dataset.val));
+      });
+    }
+    rebuildYearChips();
+    refreshCallbacks.push(rebuildYearChips);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   РЕНДЕР: DONUT с МНОЖЕСТВЕННЫМ ВЫБОРОМ
+   Donut игнорирует фильтр по статусу, чтобы пользователь всегда видел
+   полную картину и мог отметить несколько статусов сразу.
+   ═══════════════════════════════════════════════════════════════════════ */
+function renderDonut() {
+  if (state.statusCol < 0) { elCharts.innerHTML = ''; return; }
+
+  // Применяем фильтры, КРОМЕ фильтра по статусу
+  const baseRows = applyFilters(state.rows, state.statusCol);
+
+  const counts = new Map();
+  for (const r of baseRows) {
+    const v = (r[state.statusCol] || '').trim() || '—';
+    counts.set(v, (counts.get(v) || 0) + 1);
+  }
+  const groups = [...counts.entries()]
+    .map(([label, count], i, arr) => ({
+      label, count,
+      color: statusColor(label, arr.findIndex(([l]) => l === label)),
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  const total = groups.reduce((s, g) => s + g.count, 0) || 1;
+  const r = 65, cx = 80, cy = 80;
+  const C = 2 * Math.PI * r;
+
+  const activeStatusFilter = state.filters.get(state.statusCol);
+  const hasStatusFilter = activeStatusFilter && activeStatusFilter.size > 0;
+  let offset = 0;
+  const segs = groups.map(g => {
+    const len = (g.count / total) * C;
+    const isSel = activeStatusFilter ? activeStatusFilter.has(g.label) : false;
+    const seg = {
+      ...g, dasharray: `${len} ${C - len}`, dashoffset: -offset,
+      isSelected: isSel,
+      opacity: hasStatusFilter && !isSel ? 0.25 : 1,
+    };
+    offset += len;
+    return seg;
+  });
+
+  // Сумма по выбранным
+  const selectedTotal = hasStatusFilter
+    ? segs.filter(s => s.isSelected).reduce((acc, s) => acc + s.count, 0)
+    : total;
+
+  const elevBg = getComputedStyle(document.documentElement).getPropertyValue('--bg-elev').trim();
+
+  elCharts.innerHTML = `
+    <div class="card">
+      <div class="card-title">Распределение по <span class="em">статусам</span></div>
+      <div style="display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap;">
+        <div>
+          <svg class="donut-svg" width="160" height="160" viewBox="0 0 160 160">
+            <circle cx="${cx}" cy="${cy}" r="${r}" fill="none"
+                    stroke="${elevBg}" stroke-width="20" />
+            ${segs.map(s => `
+              <circle cx="${cx}" cy="${cy}" r="${r}" fill="none"
+                      stroke="${s.color}" stroke-width="20"
+                      stroke-opacity="${s.opacity}"
+                      stroke-dasharray="${s.dasharray}"
+                      stroke-dashoffset="${s.dashoffset}"
+                      transform="rotate(-90 ${cx} ${cy})"
+                      style="transition:stroke-dasharray .6s, stroke-dashoffset .6s, stroke-opacity .3s;" />
+            `).join('')}
+            <text x="${cx}" y="${cy - 2}" text-anchor="middle" class="donut-center">${selectedTotal}</text>
+            <text x="${cx}" y="${cy + 16}" text-anchor="middle" class="donut-center-label">
+              ${hasStatusFilter ? 'выбрано' : 'записей'}
+            </text>
+          </svg>
+          <div class="donut-hint">↓ Клик по строке — выбрать несколько статусов</div>
+        </div>
+        <div class="legend" style="flex:1;">
+          ${segs.map(s => {
+            return `
+              <div class="legend-row ${s.isSelected ? 'selected' : ''} ${hasStatusFilter && !s.isSelected ? 'dimmed' : ''}"
+                   data-val="${escHtml(s.label)}">
+                <span class="legend-check">✓</span>
+                <span class="legend-swatch" style="background:${s.color}"></span>
+                <span class="legend-label" title="${escHtml(s.label)}">${escHtml(s.label)}</span>
+                <span class="legend-value">${s.count}</span>
+              </div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Клики по легенде — добавление/удаление из фильтра
+  elCharts.querySelectorAll('.legend-row').forEach(row => {
+    row.addEventListener('click', () => toggleFilter(state.statusCol, row.dataset.val));
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   РЕЙТИНГИ: вычисление и рендер
+   ═══════════════════════════════════════════════════════════════════════ */
+
+// Сводка по округам по выбранным статусам и текущим фильтрам
+function computeDistrictStats(activeStatuses) {
+  // Игнорируем фильтр по статусу (у рейтинга свой выбор)
+  const base = applyFilters(state.rows, state.statusCol);
+  const map = new Map();
+
+  for (const r of base) {
+    const status = norm(r[state.statusCol]);
+    if (!activeStatuses.has(status)) continue;
+
+    const d = (r[state.districtCol] || '').trim() || '—';
+    if (!map.has(d)) map.set(d, { count: 0, volume: 0, cost: 0 });
+    const g = map.get(d);
+
+    g.count++;
+    if (state.volumeCol >= 0) {
+      const v = toNumber(r[state.volumeCol]);
+      if (v != null) g.volume += v;
+    }
+    if (state.costCol >= 0) {
+      const v = toNumber(r[state.costCol]);
+      if (v != null) g.cost += v;
+    }
+  }
+
+  return [...map.entries()].map(([label, m]) => ({ label, ...m }));
+}
+
+// Строим карточку рейтинга/антирейтинга
+function buildRatingCard(kind) {
+  const isPos = kind === 'pos';
+  const title    = isPos ? '▲ Рейтинг округов' : '▼ Антирейтинг округов';
+  const subtitle = isPos ? 'статусы с положительной динамикой'
+                         : 'проблемные статусы и обременения';
+  const fixedList = isPos ? POSITIVE_STATUSES : NEGATIVE_STATUSES;
+
+  const card = document.createElement('div');
+  card.className = `card rating-card ${kind}`;
+  card.innerHTML = `
+    <div class="rating-header">
+      <div class="rating-title">${title}</div>
+      <div class="rating-subtitle">${subtitle}</div>
+    </div>
+    <div class="rating-controls"></div>
+    <div class="rating-summary"></div>
+    <div class="bar-list"></div>
+  `;
+
+  const controlsEl = card.querySelector('.rating-controls');
+  const summaryEl  = card.querySelector('.rating-summary');
+  const barsEl     = card.querySelector('.bar-list');
+
+  /* ─── Dropdown для статусов ────────────────────────────────────────── */
+  const statusDropdown = createDropdown({
+    label: 'Статусы',
+    colorize: true,
+    width: 280,
+    getOptions: () => {
+      // Считаем по списку статусов соответствующего знака
+      return fixedList.map(s => {
+        let cnt = 0;
+        for (const r of state.rows) {
+          if (norm(r[state.statusCol]) === s) cnt++;
+        }
+        return [s, cnt];
+      });
+    },
+    getSelected: () => isPos ? state.ratingStatuses : state.antiRatingStatuses,
+    onToggle: v => {
+      const set = isPos ? state.ratingStatuses : state.antiRatingStatuses;
+      if (set.has(v)) set.delete(v); else set.add(v);
+      // Синхронизируем с глобальным фильтром → таблица обновится
+      syncRatingStatusesToGlobalFilter();
+      onFiltersChanged();
+    },
+    onClear: () => {
+      const set = isPos ? state.ratingStatuses : state.antiRatingStatuses;
+      set.clear();
+      syncRatingStatusesToGlobalFilter();
+      onFiltersChanged();
+    },
+  });
+
+  controlsEl.appendChild(statusDropdown.el);
+
+  /* ─── Метрические табы (Кол-во / Объём / Стоимость) ────────────────── */
+  const tabsEl = document.createElement('div');
+  tabsEl.className = 'metric-tabs';
+  controlsEl.appendChild(tabsEl);
+
+  function renderTabs() {
+    const current = isPos ? state.ratingMetric : state.antiRatingMetric;
+    tabsEl.innerHTML = RATING_METRICS.map(m => {
+      // Скрываем метрики Объём/Стоимость, если в данных нет соответствующих колонок
+      if (m.id === 'volume' && state.volumeCol < 0) return '';
+      if (m.id === 'cost'   && state.costCol   < 0) return '';
+      return `<button class="metric-tab ${m.id === current ? 'active' : ''}"
+                      data-metric="${m.id}">${m.label}</button>`;
+    }).join('');
+    tabsEl.querySelectorAll('.metric-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const newMetric = btn.dataset.metric;
+        if (isPos) state.ratingMetric = newMetric;
+        else       state.antiRatingMetric = newMetric;
+        renderTabs();
+        renderRatingBody();
+      });
+    });
+  }
+
+  /* ─── Тело: сводка + бары ──────────────────────────────────────────── */
+  function renderRatingBody() {
+    const activeStatuses = isPos ? state.ratingStatuses : state.antiRatingStatuses;
+    const metric = isPos ? state.ratingMetric : state.antiRatingMetric;
+    const stats = computeDistrictStats(activeStatuses);
+
+    // Сводка: общие значения по выбранным статусам
+    const totals = stats.reduce(
+      (acc, s) => ({ count: acc.count + s.count, volume: acc.volume + s.volume, cost: acc.cost + s.cost }),
+      { count: 0, volume: 0, cost: 0 }
+    );
+    const volParts  = fmtShortParts(totals.volume);
+    const costParts = fmtShortParts(totals.cost);
+
+    summaryEl.innerHTML = `
+      <div class="rating-stat">
+        <div class="rating-stat-label">Записей</div>
+        <div class="rating-stat-value">${fmtFull(totals.count)}</div>
+      </div>
+      ${state.volumeCol >= 0 ? `
+        <div class="rating-stat">
+          <div class="rating-stat-label">Объём</div>
+          <div class="rating-stat-value">${volParts.num}<span class="rating-stat-unit">${volParts.unit} м³</span></div>
+        </div>` : ''}
+      ${state.costCol >= 0 ? `
+        <div class="rating-stat">
+          <div class="rating-stat-label">Стоимость</div>
+          <div class="rating-stat-value">${costParts.num}<span class="rating-stat-unit">${costParts.unit} ₽</span></div>
+        </div>` : ''}
+    `;
+
+    // Сортируем все округа по выбранной метрике
+    const sorted = stats
+      .filter(s => s[metric] > 0)
+      .sort((a, b) => b[metric] - a[metric]);
+
+    if (sorted.length === 0) {
+      barsEl.innerHTML = `<div class="rating-empty">Нет данных по выбранным статусам</div>`;
+      return;
+    }
+
+    const maxVal = Math.max(...sorted.map(s => s[metric]), 1);
+
+    barsEl.innerHTML = sorted.map((s, i) => {
+      const value = s[metric];
+      const w = (value / maxVal * 100).toFixed(1);
+      const isDistrictActive = state.filters.has(state.districtCol)
+        && state.filters.get(state.districtCol).has(s.label);
+
+      // Главное значение для выбранной метрики
+      let primaryHtml = '';
+      if (metric === 'count') {
+        primaryHtml = `${fmtFull(value)}<span class="unit"> шт.</span>`;
+      } else if (metric === 'volume') {
+        const p = fmtShortParts(value);
+        primaryHtml = `${p.num}<span class="unit">${p.unit} м³</span>`;
+      } else {
+        const p = fmtShortParts(value);
+        primaryHtml = `${p.num}<span class="unit">${p.unit} ₽</span>`;
+      }
+
+      // Дополнительные показатели в маленьком тексте
+      const extras = [];
+      if (metric !== 'count') extras.push(`${fmtFull(s.count)} шт.`);
+      if (metric !== 'volume' && state.volumeCol >= 0) {
+        const p = fmtShortParts(s.volume);
+        extras.push(`${p.num}${p.unit} м³`);
+      }
+      if (metric !== 'cost' && state.costCol >= 0) {
+        const p = fmtShortParts(s.cost);
+        extras.push(`${p.num}${p.unit} ₽`);
+      }
+
+      return `
+        <div class="bar-row ${isDistrictActive ? 'active' : ''}" data-district="${escHtml(s.label)}">
+          <div class="bar-name" title="${escHtml(s.label)}">
+            <span class="bar-rank">${i + 1}.</span>${escHtml(s.label)}
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill ${kind}" style="width:${w}%"></div>
+          </div>
+          <div class="bar-values">
+            <div class="bar-primary">${primaryHtml}</div>
+            <div class="bar-secondary">${extras.join(' · ')}</div>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Клик по бару добавляет округ в глобальный фильтр
+    barsEl.querySelectorAll('.bar-row').forEach(row => {
+      row.addEventListener('click', () => {
+        toggleFilter(state.districtCol, row.dataset.district);
+      });
+    });
+  }
+
+  renderTabs();
+  renderRatingBody();
+
+  return {
+    el: card,
+    refresh: () => {
+      statusDropdown.refresh();
+      renderTabs();
+      renderRatingBody();
+    },
+  };
+}
+
+function renderRatings() {
+  elRating.innerHTML = '';
+  if (state.districtCol < 0 || state.statusCol < 0) return;
+
+  const posCard = buildRatingCard('pos');
+  const negCard = buildRatingCard('neg');
+  elRating.appendChild(posCard.el);
+  elRating.appendChild(negCard.el);
+
+  // Регистрируем рефрешеры (вызываются при изменении глобальных фильтров)
+  refreshCallbacks.push(posCard.refresh);
+  refreshCallbacks.push(negCard.refresh);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   РЕНДЕР: ТАБЛИЦА
+   ═══════════════════════════════════════════════════════════════════════ */
+function renderTable() {
+  const { headers, rows, numericCols, sortCol, sortDir, statusCol } = state;
+  const visible = applySort(applyFilters(rows));
+
+  elHead.innerHTML = `<tr>
+    <th title="Порядковый номер">#</th>
+    ${headers.map((h, idx) => {
+      const isNum = numericCols.has(idx);
+      const isSorted = sortCol === idx;
+      const arrow = isSorted ? (sortDir === 'asc' ? '▲' : '▼') : '⇅';
+      return `<th class="${isNum ? 'numeric' : ''} ${isSorted ? 'sorted' : ''}"
+                  data-col="${idx}" title="Сортировать">
+                ${escHtml(h)}<span class="sort-ind">${arrow}</span>
+              </th>`;
+    }).join('')}
+  </tr>`;
+
+  elHead.querySelectorAll('th[data-col]').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = +th.dataset.col;
+      if (state.sortCol === col) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+      else { state.sortCol = col; state.sortDir = 'asc'; }
+      renderTable();
+    });
+  });
+
+  if (!visible.length) {
+    elBody.innerHTML = `<tr><td colspan="999">
+      <div class="empty-state">
+        <div class="icon">🔍</div>
+        <div>Ничего не найдено по текущим фильтрам</div>
+      </div>
+    </td></tr>`;
+  } else {
+    elBody.innerHTML = visible.map((row, idx) => `
+      <tr>
+        <td class="row-num">${idx + 1}</td>
+        ${headers.map((_, ci) => {
+          const v = row[ci] !== undefined ? row[ci] : '';
+          const num = numericCols.has(ci);
+          if (ci === statusCol && v) {
+            const kind = statusKind(v);
+            return `<td title="${escHtml(v)}"><span class="status-badge ${kind}">${escHtml(v)}</span></td>`;
+          }
+          const display = num && toNumber(v) != null ? fmtFull(toNumber(v)) : v;
+          return `<td class="${num ? 'numeric' : ''}" title="${escHtml(v)}">${escHtml(display)}</td>`;
+        }).join('')}
+      </tr>
+    `).join('');
+  }
+
+  const total = rows.length;
+  elRowCount.innerHTML = visible.length === total
+    ? `Показано <strong>${fmtFull(total)}</strong> ${pluralRow(total)}, <strong>${headers.length}</strong> столбцов`
+    : `Показано <strong>${fmtFull(visible.length)}</strong> из <strong>${fmtFull(total)}</strong> ${pluralRow(total)}`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ПОЛНЫЙ РЕНДЕР (после загрузки данных)
+   ═══════════════════════════════════════════════════════════════════════ */
+function renderAll() {
+  // Очищаем список рефрешеров перед полной перерисовкой
+  refreshCallbacks.length = 0;
+  renderKPIs();
+  renderFilters();
+  renderDonut();
+  renderRatings();
+  renderActiveFilters();
+  renderTable();
+  elClearBtn.hidden = !(state.filters.size > 0 || state.search);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ЗАГРУЗКА ДАННЫХ
+   ═══════════════════════════════════════════════════════════════════════ */
+async function fetchData() {
+  elSpinner.classList.add('active');
+  elStatus.className = 'status-ok'; elStatus.textContent = '●';
+
+  try {
+    const res = await fetch(`${CSV_URL}&_=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    if (!text.trim()) throw new Error('Пустой ответ');
+
+    const parsed = parseCSV(text);
+    if (parsed.length < 2) throw new Error('Нет данных в таблице');
+
+    state.headers     = parsed[0];
+    state.rows        = parsed.slice(1);
+    state.numericCols = detectNumericCols(state.headers, state.rows);
+
+    // Автоопределение спец. колонок
+    state.districtCol = findColumn('округ');
+    state.statusCol   = findColumn('статус');
+    state.yearCol     = findColumn('дотац', 'год');
+    state.volumeCol   = findColumn('объем', 'объём', 'куб.м', 'куб');
+    state.costCol     = findColumn('стоимость', 'стоим');
+
+    // Маппинг: lowercase → оригинальный регистр из данных (для синхронизации фильтров)
+    state.statusCaseMap = new Map();
+    if (state.statusCol >= 0) {
+      for (const r of state.rows) {
+        const v = (r[state.statusCol] || '').trim();
+        if (v) state.statusCaseMap.set(norm(v), v);
+      }
+    }
+
+    renderAll();
+    elErrBar.classList.remove('visible');
+    elStatus.className = 'status-ok'; elStatus.textContent = '✔';
+
+  } catch (err) {
+    console.error('[Dashboard]', err);
+    elErrMsg.textContent = `Ошибка: ${err.message}`;
+    elErrBar.classList.add('visible');
+    elStatus.className = 'status-err'; elStatus.textContent = '✖';
+  } finally {
+    elSpinner.classList.remove('active');
+    elLastUpd.textContent = new Date().toLocaleTimeString('ru-RU', {
+      hour:'2-digit', minute:'2-digit', second:'2-digit'
+    });
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ОБРАТНЫЙ ОТСЧЁТ
+   ═══════════════════════════════════════════════════════════════════════ */
+let countdownSec = REFRESH_INTERVAL / 1000;
+function startCountdown() {
+  countdownSec = REFRESH_INTERVAL / 1000;
+  const t = setInterval(() => {
+    countdownSec--;
+    if (countdownSec <= 0) { clearInterval(t); elNextUpd.textContent = '…'; }
+    else elNextUpd.textContent = `${countdownSec} с`;
+  }, 1000);
+  return t;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   UI HANDLERS
+   ═══════════════════════════════════════════════════════════════════════ */
+elSearch.addEventListener('input', e => {
+  state.search = e.target.value;
+  onFiltersChanged(false); // не скроллить — пользователь уже в зоне поиска
+});
+elClearBtn.addEventListener('click', clearAllFilters);
+
+/* ═══════════════════════════════════════════════════════════════════════
+   СТАРТ
+   ═══════════════════════════════════════════════════════════════════════ */
+fetchData();
+let timer = startCountdown();
+setInterval(() => {
+  fetchData();
+  clearInterval(timer);
+  timer = startCountdown();
+}, REFRESH_INTERVAL);
+</script>
+</body>
+</html>
