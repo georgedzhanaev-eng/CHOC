@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data Stream · Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://api-maps.yandex.ru/2.1/?apikey=c4e89ddd-41b1-4ed4-9c3d-1fca0e290609&lang=ru_RU&load=package.full" type="text/javascript"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg-app:#f4f7fb;--bg-card:#ffffff;--bg-elev:#f1f5f9;--bg-hover:#e7eef5;--bg-subtle:#f8fafc;
+      --border:#e2e8f0;--border-strong:#cbd5e1;
+      --text-primary:#0f172a;--text-secondary:#475569;--text-soft:#64748b;--text-muted:#94a3b8;
+      --accent:#0891b2;--accent-dark:#0e7490;--accent-soft:#ecfeff;--accent-mid:#cffafe;
+      --success:#059669;--success-soft:#d1fae5;--danger:#dc2626;--danger-soft:#fee2e2;
+      --r-sm:6px;--r:10px;
+      --shadow-sm:0 1px 2px rgba(15,23,42,.04);
+      --shadow:0 4px 12px rgba(15,23,42,.06),0 1px 2px rgba(15,23,42,.04);
+      --shadow-lg:0 12px 32px rgba(15,23,42,.12),0 4px 8px rgba(15,23,42,.04);
+      --font-mono:'JetBrains Mono',monospace;--font-display:'Manrope',system-ui,sans-serif;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{min-height:100%;background:var(--bg-app);color:var(--text-primary);
+      font-family:var(--font-mono);font-size:13px;line-height:1.5;
+      font-feature-settings:"tnum" 1;font-variant-numeric:tabular-nums;
+      background-image:radial-gradient(ellipse 800px 400px at top right,rgba(8,145,178,.05),transparent 60%),
+        radial-gradient(ellipse 600px 300px at top left,rgba(99,102,241,.04),transparent 60%);
+      background-attachment:fixed;}
+    .shell{max-width:1500px;margin:0 auto;padding:24px 22px 60px}
+
+    /* Логотип */
+    .org-logo-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;position:relative;min-height:54px}
+    .org-logo-bar img{height:54px;width:auto;object-fit:contain;border-radius:4px;flex-shrink:0}
+    .org-logo-bar .org-title{position:absolute;left:50%;transform:translateX(-50%);
+      font-family:var(--font-display);font-weight:800;font-size:clamp(24px,4vw,32px);
+      letter-spacing:.08em;text-transform:uppercase;color:var(--text-primary);white-space:nowrap}
+
+    /* Шапка */
+    header.top{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px;
+      margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid var(--border)}
+    .logo-block{display:flex;align-items:center;gap:14px}
+    #reset-btn:hover{background:#b91c1c;box-shadow:0 4px 12px rgba(220,38,38,.4)}
+    #excel-btn:hover{background:#047857;box-shadow:0 4px 12px rgba(5,150,105,.4)}
+    .pulse-dot{width:10px;height:10px;border-radius:50%;background:var(--accent);
+      box-shadow:0 0 0 4px rgba(8,145,178,.18);animation:pulse 2s ease-in-out infinite;flex-shrink:0}
+    @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.75)}}
+    h1{font-family:var(--font-display);font-size:clamp(22px,4vw,30px);font-weight:800;
+      color:var(--text-primary);letter-spacing:-.025em}
+    h1 span{color:var(--accent)}
+    .meta{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+    .meta-item{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);
+      letter-spacing:.04em;text-transform:uppercase;font-weight:600}
+    .meta-item .value{color:var(--text-secondary);font-weight:700}
+    .spinner{width:14px;height:14px;border:2px solid var(--border-strong);border-top-color:var(--accent);
+      border-radius:50%;animation:spin .7s linear infinite;display:none}
+    .spinner.active{display:block}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .status-ok{color:var(--success);font-size:14px}
+    .status-err{color:var(--danger);font-size:14px}
+
+    /* Ошибка */
+    #error-bar{display:none;align-items:center;gap:10px;padding:11px 16px;
+      background:var(--danger-soft);border:1px solid #fca5a5;border-radius:var(--r);
+      color:#991b1b;font-size:12px;margin-bottom:18px}
+    #error-bar.visible{display:flex}
+    #error-bar .ml-auto{margin-left:auto;color:#b91c1c;opacity:.8}
+
+    /* KPI */
+    .kpi-grid{display:grid;gap:14px;margin-bottom:18px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+    .kpi-card{position:relative;padding:18px 22px;background:var(--bg-card);border:1px solid var(--border);
+      border-radius:var(--r);box-shadow:var(--shadow-sm);overflow:hidden;transition:transform .2s,box-shadow .2s}
+    .kpi-card:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+    .kpi-card::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;
+      background:var(--c-accent,var(--accent));border-radius:var(--r) 0 0 var(--r)}
+    .kpi-label{font-family:var(--font-display);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+      color:var(--text-muted);margin-bottom:10px;font-weight:700}
+    .kpi-value{font-family:var(--font-display);font-weight:800;font-size:clamp(24px,3.2vw,32px);
+      color:var(--text-primary);line-height:1.05;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+    .kpi-unit{font-family:var(--font-display);font-size:.55em;color:var(--text-soft);font-weight:600;margin-left:4px}
+    .kpi-sub{margin-top:8px;font-size:11px;color:var(--text-soft);font-family:var(--font-display);font-weight:500}
+    .kpi-sub b{color:var(--c-accent,var(--accent));font-weight:700}
+
+    /* Карточки */
+    .card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r);
+      box-shadow:var(--shadow-sm);padding:18px 20px}
+    .card-title{font-family:var(--font-display);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+      color:var(--text-soft);font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+    .card-title .em{color:var(--accent)}
+
+    /* Фильтры */
+    .filter-panel{padding:16px 20px;margin-bottom:18px;overflow:visible !important;position:relative;z-index:500}
+    .filter-row-main{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+    .filter-section-label{font-family:var(--font-display);font-size:10px;letter-spacing:.1em;
+      text-transform:uppercase;color:var(--text-muted);font-weight:700}
+    .filter-divider{width:1px;height:22px;background:var(--border)}
+
+    /* Dropdown */
+    .dropdown{position:relative;display:inline-block}
+    .dropdown-trigger{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-sm);
+      padding:8px 12px 8px 14px;display:inline-flex;align-items:center;gap:8px;
+      font-family:var(--font-display);font-size:12px;font-weight:600;color:var(--text-primary);
+      cursor:pointer;transition:all .12s;min-width:200px;justify-content:space-between}
+    .dropdown-trigger:hover{border-color:var(--border-strong);background:var(--bg-hover)}
+    .dropdown.open .dropdown-trigger{border-color:var(--accent);background:var(--accent-soft);
+      box-shadow:0 0 0 3px var(--accent-mid)}
+    .dropdown.has-selection .dropdown-trigger{border-color:var(--accent);color:var(--accent-dark)}
+    .dropdown-label-wrap{display:flex;align-items:center;gap:8px;min-width:0}
+    .dropdown-label-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .dropdown-badge{background:var(--accent);color:#fff;border-radius:999px;padding:1px 8px;
+      font-size:10px;font-weight:700;min-width:20px;text-align:center;font-variant-numeric:tabular-nums}
+    .dropdown-badge[hidden]{display:none}
+    .dropdown-arrow{font-size:9px;color:var(--text-muted);transition:transform .15s;flex-shrink:0}
+    .dropdown.open .dropdown-arrow{transform:rotate(180deg);color:var(--accent)}
+    .dropdown-panel{position:absolute;top:calc(100% + 6px);left:0;width:320px;max-height:460px;
+      background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r);
+      box-shadow:var(--shadow-lg);z-index:9999;display:none;flex-direction:column;overflow:hidden}
+    .dropdown.open .dropdown-panel{display:flex}
+    .dropdown-search{padding:10px;border-bottom:1px solid var(--border)}
+    .dropdown-search input{width:100%;background:var(--bg-subtle);border:1px solid var(--border);
+      border-radius:var(--r-sm);padding:7px 11px;font-family:var(--font-mono);font-size:12px;
+      color:var(--text-primary);outline:none;transition:all .15s}
+    .dropdown-search input::placeholder{color:var(--text-muted)}
+    .dropdown-search input:focus{border-color:var(--accent);background:#fff}
+    .dropdown-options{overflow:auto;flex:1;padding:4px 0;scrollbar-width:thin}
+    .dropdown-options::-webkit-scrollbar{width:6px}
+    .dropdown-options::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:3px}
+    .dropdown-option{display:grid;grid-template-columns:18px 1fr auto;gap:10px;align-items:center;
+      padding:7px 14px;cursor:pointer;font-size:12px;transition:background .1s;user-select:none}
+    .dropdown-option:hover{background:var(--bg-elev)}
+    .dropdown-option .checkmark{width:16px;height:16px;border:1.5px solid var(--border-strong);
+      border-radius:4px;display:flex;align-items:center;justify-content:center;color:transparent;
+      font-size:11px;font-weight:700;transition:all .1s;flex-shrink:0}
+    .dropdown-option.selected .checkmark{background:var(--accent);border-color:var(--accent);color:#fff}
+    .dropdown-option.pos .label{color:var(--success);font-weight:500}
+    .dropdown-option.neg .label{color:var(--danger);font-weight:500}
+    .dropdown-option.pos.selected .checkmark{background:var(--success);border-color:var(--success)}
+    .dropdown-option.neg.selected .checkmark{background:var(--danger);border-color:var(--danger)}
+    .dropdown-option .label{color:var(--text-primary);white-space:nowrap;overflow:hidden;
+      text-overflow:ellipsis;font-family:var(--font-mono)}
+    .dropdown-option .count{color:var(--text-muted);font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
+    .dropdown-empty{padding:24px 16px;text-align:center;color:var(--text-muted);font-size:12px}
+    .dropdown-footer{padding:8px 14px;border-top:1px solid var(--border);display:flex;
+      justify-content:space-between;align-items:center;background:var(--bg-subtle)}
+    .dropdown-clear{background:none;border:none;color:var(--text-soft);cursor:pointer;
+      font-family:var(--font-display);font-size:10px;font-weight:700;text-transform:uppercase;
+      letter-spacing:.06em;padding:4px 8px;border-radius:4px;transition:all .1s}
+    .dropdown-clear:hover{color:var(--danger);background:var(--danger-soft)}
+    .dropdown-clear:disabled{opacity:.35;cursor:default}
+    .dropdown-clear:disabled:hover{color:var(--text-soft);background:none}
+    .dropdown-info{color:var(--text-muted);font-size:11px;font-variant-numeric:tabular-nums;
+      font-family:var(--font-display);font-weight:600}
+
+    /* Чипы */
+    .chip-group{display:flex;flex-wrap:wrap;gap:5px}
+    .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;background:var(--bg-elev);
+      border:1px solid var(--border);border-radius:999px;font-size:11px;font-family:var(--font-mono);
+      color:var(--text-secondary);cursor:pointer;transition:all .12s;user-select:none;white-space:nowrap}
+    .chip:hover{background:var(--bg-hover);border-color:var(--border-strong);color:var(--text-primary)}
+    .chip.active{background:var(--accent);border-color:var(--accent-dark);color:#fff;
+      box-shadow:0 2px 6px rgba(8,145,178,.3)}
+    .chip .chip-count{font-size:10px;font-weight:700;opacity:.65;padding-left:4px;
+      border-left:1px solid currentColor;font-variant-numeric:tabular-nums}
+    .chip.active .chip-count{opacity:.9}
+
+    .search-row{display:flex;gap:10px;align-items:center;margin-top:14px;padding-top:14px;
+      border-top:1px dashed var(--border)}
+    #search{flex:1;background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--r-sm);
+      padding:10px 14px;color:var(--text-primary);font-family:var(--font-mono);font-size:13px;
+      transition:border-color .15s,box-shadow .15s}
+    #search::placeholder{color:var(--text-muted)}
+    #search:focus{outline:none;border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px var(--accent-mid)}
+    .clear-filters{background:transparent;border:1px solid var(--border);border-radius:var(--r-sm);
+      color:var(--text-soft);font-family:var(--font-display);font-size:11px;font-weight:700;
+      padding:10px 14px;cursor:pointer;transition:all .15s;letter-spacing:.04em;text-transform:uppercase}
+    .clear-filters:hover{color:var(--danger);border-color:var(--danger);background:var(--danger-soft)}
+    .clear-filters[hidden]{display:none}
+
+    /* Donut */
+    .charts-grid{display:grid;gap:14px;margin-bottom:18px;grid-template-columns:minmax(280px,1fr)}
+    .donut-svg{flex-shrink:0}
+    .donut-center{font-family:var(--font-display);font-weight:800;fill:var(--text-primary);font-size:24px;letter-spacing:-.02em}
+    .donut-center-label{fill:var(--text-muted);font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+      font-weight:700;font-family:var(--font-display)}
+    .donut-hint{font-size:10px;color:var(--text-muted);font-family:var(--font-display);font-weight:600;
+      letter-spacing:.04em;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)}
+    .legend{flex:1;min-width:220px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:4px}
+    .legend-row{display:grid;grid-template-columns:16px 10px 1fr auto;gap:9px;align-items:center;
+      font-size:12px;cursor:pointer;padding:6px 10px;border-radius:var(--r-sm);transition:background .12s;user-select:none}
+    .legend-row:hover{background:var(--bg-elev)}
+    .legend-row.selected{background:var(--accent-soft)}
+    .legend-row.dimmed{opacity:.45}
+    .legend-check{width:14px;height:14px;border:1.5px solid var(--border-strong);border-radius:3px;
+      display:flex;align-items:center;justify-content:center;color:transparent;font-size:10px;
+      font-weight:700;transition:all .1s}
+    .legend-row.selected .legend-check{background:var(--accent);border-color:var(--accent);color:#fff}
+    .legend-swatch{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+    .legend-label{color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .legend-value{color:var(--text-soft);font-weight:700;font-variant-numeric:tabular-nums}
+
+    /* === ГРУППЫ СТАТУСОВ (Исполнено / Приоритет / НПО) === */
+    .sg-grid{display:grid;gap:14px;margin-bottom:18px;grid-template-columns:repeat(3,1fr)}
+    @media(max-width:900px){.sg-grid{grid-template-columns:1fr}}
+    .sg-card{position:relative;padding:20px;overflow:hidden}
+    .sg-card::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;
+      border-radius:var(--r) 0 0 var(--r);background:var(--sg-color,var(--accent))}
+    .sg-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+    .sg-title{font-family:var(--font-display);font-weight:800;font-size:14px;letter-spacing:.06em;
+      text-transform:uppercase;color:var(--sg-color,var(--accent));cursor:pointer;transition:opacity .15s}
+    .sg-title:hover{opacity:.7}
+    .sg-card.sg-active{border-color:var(--sg-color);box-shadow:0 0 0 2px var(--sg-color),var(--shadow)}
+    .sg-card .sg-header{cursor:pointer}
+    .sg-count{font-family:var(--font-display);font-weight:800;font-size:28px;color:var(--text-primary);
+      letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+    .sg-count .sg-unit{font-size:13px;font-weight:600;color:var(--text-soft);margin-left:3px}
+    .sg-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+    .sg-metric{background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px}
+    .sg-metric-label{font-family:var(--font-display);font-size:9px;letter-spacing:.08em;
+      text-transform:uppercase;color:var(--text-muted);font-weight:700}
+    .sg-metric-value{font-family:var(--font-display);font-size:14px;font-weight:800;
+      color:var(--text-primary);margin-top:2px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+    .sg-metric-unit{font-size:10px;color:var(--text-soft);font-weight:600}
+    .sg-status-list{display:flex;flex-direction:column;gap:6px}
+    .sg-status-row{display:grid;grid-template-columns:minmax(80px,1fr) 2.5fr auto;gap:10px;align-items:center;
+      font-size:12px;padding:4px 0;cursor:pointer;transition:background .12s;border-radius:var(--r-sm)}
+    .sg-status-row:hover{background:var(--bg-hover)}
+    .sg-status-name{color:var(--text-primary);font-weight:600;white-space:nowrap;overflow:hidden;
+      text-overflow:ellipsis;font-family:var(--font-display);font-size:11px}
+    .sg-bar-track{height:22px;background:var(--bg-elev);border-radius:6px;overflow:hidden;position:relative}
+    .sg-bar-fill{height:100%;border-radius:6px;transition:width .5s cubic-bezier(.4,0,.2,1);
+      background:linear-gradient(90deg,var(--sg-color),var(--sg-color-light,var(--sg-color)));opacity:.75}
+    .sg-bar-fill:hover{opacity:1}
+    .sg-status-count{font-family:var(--font-display);font-weight:800;color:var(--sg-color,var(--accent));
+      font-variant-numeric:tabular-nums;font-size:14px;min-width:28px;text-align:right}
+
+    /* Рейтинги */
+    .rating-grid{display:grid;gap:14px;margin-bottom:18px;grid-template-columns:repeat(auto-fit,minmax(460px,1fr))}
+    @media(max-width:1000px){.rating-grid{grid-template-columns:1fr}}
+    .rating-card{position:relative;padding:18px 20px}
+    .rating-card::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;border-radius:var(--r) 0 0 var(--r)}
+    .rating-card.pos::before{background:var(--success)}
+    .rating-card.neg::before{background:var(--danger)}
+    .rating-header{margin-bottom:14px}
+    .rating-title{font-family:var(--font-display);font-weight:800;font-size:17px;letter-spacing:-.02em;
+      margin-bottom:4px;display:flex;align-items:center;gap:8px}
+    .rating-card.pos .rating-title{color:var(--success)}
+    .rating-card.neg .rating-title{color:var(--danger)}
+    .rating-subtitle{font-family:var(--font-display);font-size:11px;color:var(--text-muted);
+      letter-spacing:.04em;text-transform:uppercase;font-weight:600}
+    .rating-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px 0;
+      margin-bottom:10px;border-bottom:1px dashed var(--border)}
+    .rating-controls .dropdown-trigger{min-width:170px}
+    .rating-controls .dropdown-panel{width:280px}
+    .metric-tabs{display:inline-flex;background:var(--bg-elev);border-radius:var(--r-sm);padding:3px;gap:2px}
+    .metric-tab{background:none;border:none;padding:6px 12px;font-family:var(--font-display);
+      font-size:11px;font-weight:600;color:var(--text-soft);cursor:pointer;border-radius:4px;
+      transition:all .15s;letter-spacing:.02em}
+    .metric-tab:hover{color:var(--text-primary)}
+    .metric-tab.active{background:var(--bg-card);color:var(--accent);
+      box-shadow:0 1px 3px rgba(15,23,42,.08);font-weight:700}
+    .rating-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+    .rating-stat{background:var(--bg-subtle);border-radius:var(--r-sm);padding:8px 10px;border:1px solid var(--border)}
+    .rating-stat-label{font-family:var(--font-display);font-size:9px;letter-spacing:.08em;
+      text-transform:uppercase;color:var(--text-muted);font-weight:700}
+    .rating-stat-value{font-family:var(--font-display);font-size:15px;font-weight:800;
+      color:var(--text-primary);margin-top:2px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+    .rating-stat-unit{font-size:11px;color:var(--text-soft);font-weight:600}
+    .bar-list{display:flex;flex-direction:column;gap:8px;max-height:420px;overflow-y:auto;
+      padding-right:4px;scrollbar-width:thin}
+    .bar-list::-webkit-scrollbar{width:6px}
+    .bar-list::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:3px}
+    .bar-row{display:grid;grid-template-columns:minmax(110px,1.1fr) 2fr minmax(85px,auto);gap:10px;
+      align-items:center;cursor:pointer;padding:6px 6px;border-radius:var(--r-sm);transition:background .12s}
+    .bar-row:hover{background:var(--bg-elev)}
+    .bar-row.active{background:var(--accent-soft)}
+    .bar-name{color:var(--text-primary);font-weight:600;font-size:12px;white-space:nowrap;
+      overflow:hidden;text-overflow:ellipsis;font-family:var(--font-display)}
+    .bar-rank{display:inline-block;font-family:var(--font-display);font-size:10px;font-weight:700;
+      color:var(--text-muted);min-width:18px;font-variant-numeric:tabular-nums;margin-right:4px}
+    .bar-track{height:10px;background:var(--bg-elev);border-radius:5px;overflow:hidden}
+    .bar-fill{height:100%;border-radius:5px;transition:width .5s cubic-bezier(.4,0,.2,1)}
+    .bar-fill.pos{background:linear-gradient(90deg,#10b981,#34d399)}
+    .bar-fill.neg{background:linear-gradient(90deg,#dc2626,#f59e0b)}
+    .bar-values{text-align:right;font-family:var(--font-display);line-height:1.25}
+    .bar-primary{font-size:13px;font-weight:800;color:var(--text-primary);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+    .bar-primary .unit{font-size:10px;font-weight:600;color:var(--text-soft);margin-left:2px}
+    .bar-secondary{font-size:10px;color:var(--text-muted);font-weight:500;margin-top:1px;
+      font-variant-numeric:tabular-nums;white-space:nowrap}
+    .rating-empty{text-align:center;padding:24px 12px;color:var(--text-muted);font-size:12px}
+
+    /* Активные фильтры */
+    .active-filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:12px;
+      padding:12px 16px;background:var(--accent-soft);border:1px solid var(--accent-mid);
+      border-radius:var(--r);animation:slideUp .25s ease both}
+    .active-filters-label{font-family:var(--font-display);font-size:11px;font-weight:700;
+      color:var(--accent-dark);letter-spacing:.04em;text-transform:uppercase;margin-right:6px}
+    .active-tag{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 12px;
+      background:var(--bg-card);border:1px solid var(--accent);border-radius:999px;font-size:11px;
+      font-family:var(--font-mono);color:var(--accent-dark);font-weight:600;cursor:default;
+      transition:all .12s;box-shadow:0 1px 3px rgba(8,145,178,.12)}
+    .active-tag .tag-group{font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+      color:var(--text-muted);font-family:var(--font-display)}
+    .active-tag .tag-remove{display:inline-flex;align-items:center;justify-content:center;
+      width:16px;height:16px;border-radius:50%;background:var(--accent-mid);color:var(--accent-dark);
+      font-size:10px;cursor:pointer;transition:all .12s;border:none;font-weight:700;padding:0;line-height:1}
+    .active-tag .tag-remove:hover{background:var(--danger);color:#fff}
+
+    /* Таблица */
+    .row-count{font-size:11px;color:var(--text-muted);margin-bottom:10px;letter-spacing:.04em;padding:0 4px}
+    .row-count strong{color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums}
+    .table-wrap{width:100%;overflow:auto;background:var(--bg-card);border:1px solid var(--border);
+      border-radius:var(--r);box-shadow:var(--shadow);max-height:70vh}
+    table{width:100%;border-collapse:collapse;min-width:600px}
+    thead tr{background:var(--bg-subtle);position:sticky;top:0;z-index:2}
+    th{padding:12px 14px;text-align:left;font-family:var(--font-display);font-size:10px;font-weight:700;
+      letter-spacing:.08em;text-transform:uppercase;color:var(--text-soft);border-bottom:2px solid var(--border);
+      white-space:nowrap;user-select:none;cursor:pointer;transition:background .12s,color .12s}
+    th:hover{background:var(--bg-elev);color:var(--accent)}
+    th:not(:last-child){border-right:1px solid var(--border)}
+    th .sort-ind{display:inline-block;margin-left:6px;color:var(--text-muted);font-size:9px;transition:color .12s}
+    th.sorted,th.sorted .sort-ind{color:var(--accent)}
+    th.numeric{text-align:right}
+    tbody tr{transition:background .1s;border-bottom:1px solid var(--border)}
+    tbody tr:last-child{border-bottom:none}
+    tbody tr:nth-child(even){background:var(--bg-subtle)}
+    tbody tr:hover{background:var(--accent-soft)}
+    td{padding:10px 14px;color:var(--text-primary);white-space:nowrap;max-width:340px;overflow:hidden;
+      text-overflow:ellipsis;font-size:12px}
+    td:not(:last-child){border-right:1px solid var(--border)}
+    td.row-num{color:var(--text-muted);font-size:11px;min-width:40px;text-align:right;user-select:none;font-variant-numeric:tabular-nums}
+    td.numeric{text-align:right;font-variant-numeric:tabular-nums}
+    .status-badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600;
+      background:var(--bg-elev);color:var(--text-secondary)}
+    .status-badge.pos{background:var(--success-soft);color:#065f46}
+    .status-badge.neg{background:var(--danger-soft);color:#991b1b}
+    .empty-state{text-align:center;padding:50px 20px;color:var(--text-muted)}
+    .empty-state .icon{font-size:32px;margin-bottom:10px}
+    footer{margin-top:28px;text-align:center;font-size:10px;color:var(--text-muted);letter-spacing:.05em}
+    .map-card{margin-top:18px}
+    .map-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px}
+    .map-title{font-family:var(--font-display);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-soft);font-weight:700}
+    .map-title .em{color:var(--accent)}
+    .map-count{font-family:var(--font-display);font-size:12px;font-weight:700;color:var(--text-muted)}
+    #ymap{width:100%;height:500px;}
+    .map-outer{border-radius:var(--r);border:1px solid var(--border);overflow:hidden;box-shadow:var(--shadow)}
+    .map-progress{margin-top:8px;font-size:11px;color:var(--text-muted);font-family:var(--font-display);font-weight:600}
+    .map-legend{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:10px;font-size:11px;font-family:var(--font-display);font-weight:600}
+    .map-legend-item{display:flex;align-items:center;gap:5px;color:var(--text-secondary);
+      cursor:pointer;padding:4px 10px;border-radius:999px;transition:all .15s;user-select:none;
+      border:1px solid transparent;font-weight:600}
+    .map-legend-item:hover{background:var(--bg-hover);border-color:var(--border)}
+    .map-legend-item.active{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-dark)}
+    .map-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;border:1px solid rgba(0,0,0,.15)}
+    @keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    .kpi-card,.card{animation:slideUp .35s ease both}
+    @media(max-width:700px){header.top{flex-direction:column;align-items:flex-start}.meta{gap:10px}
+      .dropdown-trigger{min-width:0}.dropdown-panel{width:280px}.rating-summary{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="shell">
+  <div class="org-logo-bar">
+    <img src="data:image/png;base64,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" alt="Министерство строительного комплекса Московской области" />
+    <h1 class="org-title">Снос аварийных домов</h1>
+    <img src="data:image/png;base64,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" alt="БАРС" style="height:64px;width:auto;object-fit:contain;align-self:flex-start;" />
+  </div>
+  <header class="top">
+    <div class="logo-block">
+      <button id="reset-btn" style="background:#dc2626;color:#fff;border:none;
+        border-radius:var(--r-sm);padding:7px 14px;font-family:var(--font-display);font-size:11px;font-weight:700;
+        cursor:pointer;letter-spacing:.04em;text-transform:uppercase;transition:all .15s;
+        box-shadow:0 2px 6px rgba(220,38,38,.3)">✕ Сбросить</button>
+      <button id="excel-btn" style="background:#059669;color:#fff;border:none;
+        border-radius:var(--r-sm);padding:7px 14px;font-family:var(--font-display);font-size:11px;font-weight:700;
+        cursor:pointer;letter-spacing:.04em;text-transform:uppercase;transition:all .15s;
+        box-shadow:0 2px 6px rgba(5,150,105,.3)">⬇ Excel</button>
+    </div>
+    <div class="meta">
+      <div class="spinner" id="spinner"></div>
+      <span id="status-icon" class="status-ok" title="Статус">●</span>
+      <div class="meta-item"><span>Обновлено</span><span class="value" id="last-update">—</span></div>
+      <div class="meta-item"><span>Интервал</span><span class="value">5 ч</span></div>
+      <div class="meta-item"><span>До обновления</span><span class="value" id="next-update">—</span></div>
+      <button id="refresh-btn" style="background:var(--accent);color:#fff;border:none;border-radius:var(--r-sm);
+        padding:7px 14px;font-family:var(--font-display);font-size:11px;font-weight:700;cursor:pointer;
+        letter-spacing:.04em;text-transform:uppercase;transition:all .15s;box-shadow:0 2px 6px rgba(8,145,178,.3)">⟳ Обновить</button>
+    </div>
+  </header>
+  <div id="error-bar"><span>⚠</span><span id="error-msg">Ошибка загрузки данных</span>
+    <span class="ml-auto">Отображены данные предыдущего запроса</span></div>
+  <section class="kpi-grid" id="kpi-grid"></section>
+  <section class="card filter-panel">
+    <div class="filter-row-main" id="filter-row"></div>
+    <div class="search-row">
+      <input id="search" type="text" placeholder="🔍  Поиск по таблице…" autocomplete="off" />
+      <button class="clear-filters" id="clear-filters" hidden>× Сбросить всё</button>
+    </div>
+  </section>
+  <section class="charts-grid" id="charts-grid"></section>
+  <section class="sg-grid" id="sg-grid"></section>
+  <section class="rating-grid" id="rating-grid"></section>
+  <div id="active-filters"></div>
+  <div class="row-count" id="row-count"></div>
+  <div class="table-wrap" id="table-wrap">
+    <table id="data-table"><thead id="table-head"></thead>
+      <tbody id="table-body"><tr><td colspan="999"><div class="empty-state"><div class="icon">⌛</div><div>Загрузка данных…</div></div></td></tr></tbody>
+    </table>
+  </div>
+
+  <section class="card map-card">
+    <div class="map-header">
+      <div class="map-title">📍 Карта домов</div>
+      <div class="map-count" id="map-count"></div>
+    </div>
+    <div class="map-legend">
+      <span class="map-legend-item" data-group="executed"><span class="map-dot" style="background:#22c55e"></span>Исполнено</span>
+      <span class="map-legend-item" data-group="priority"><span class="map-dot" style="background:#f59e0b"></span>Приоритет</span>
+      <span class="map-legend-item" data-group="npo"><span class="map-dot" style="background:#dc2626"></span>НПО</span>
+    </div>
+    <div class="map-outer">
+      <div id="ymap"></div>
+    </div>
+    <div class="map-progress" id="map-progress"></div>
+  </section>
+
+  <footer>Источник: Google Таблицы · Автообновление каждые 5 часов</footer>
+</div>
+
+<script>
+const CSV_URL='https://docs.google.com/spreadsheets/d/e/2PACX-1vR0WE7EQQGvgGEgNyP-uXDNG7pGjspEVn-5IFc5mk0NfnKQ9fTstE_2ypUg7b2y064OgwkOtmwrLdG8/pub?output=csv';
+const REFRESH_INTERVAL=18000000;
+const POSITIVE_STATUSES=['контракт заключен','не подлежит сносу','опубликовано','снесен','снос своими силами'];
+const NEGATIVE_STATUSES=['запрет','наследство','подлежит расселению','публикация','расселен','розыск','сво','суд'];
+const POS_SET=new Set(POSITIVE_STATUSES),NEG_SET=new Set(NEGATIVE_STATUSES);
+const PALETTE=['#0891b2','#10b981','#f59e0b','#ec4899','#8b5cf6','#14b8a6','#ef4444','#6366f1','#84cc16','#f97316','#06b6d4','#a855f7'];
+const RATING_METRICS=[{id:'count',label:'Кол-во',short:'шт.'},{id:'volume',label:'Объём',short:'м³'},{id:'cost',label:'Стоимость',short:'₽'}];
+
+// Три группы статусов для карточек
+const STATUS_GROUPS=[
+  {id:'executed',title:'Исполнено',color:'#059669',colorLight:'#6ee7b7',
+   statuses:['снесен','контракт заключен','опубликовано','снос своими силами','не подлежит сносу']},
+  {id:'priority',title:'Приоритет',color:'#d97706',colorLight:'#fcd34d',
+   statuses:['публикация','расселен']},
+  {id:'npo',title:'НПО',color:'#dc2626',colorLight:'#fca5a5',
+   statuses:['запрет','сво','суд','подлежит расселению','розыск','наследство']},
+];
+
+const state={headers:[],rows:[],numericCols:new Set(),
+  districtCol:-1,statusCol:-1,yearCol:-1,volumeCol:-1,costCol:-1,
+  filters:new Map(),search:'',
+  ratingStatuses:new Set(POSITIVE_STATUSES),antiRatingStatuses:new Set(NEGATIVE_STATUSES),
+  ratingMetric:'count',antiRatingMetric:'count',sortCol:null,sortDir:'asc',statusCaseMap:new Map()};
+
+const $=id=>document.getElementById(id);
+const elSpinner=$('spinner'),elStatus=$('status-icon'),elLastUpd=$('last-update'),elNextUpd=$('next-update');
+const elErrBar=$('error-bar'),elErrMsg=$('error-msg'),elKpiGrid=$('kpi-grid');
+const elFilterRow=$('filter-row'),elSearch=$('search'),elClearBtn=$('clear-filters');
+const elCharts=$('charts-grid'),elSgGrid=$('sg-grid'),elRating=$('rating-grid');
+const elActiveFilters=$('active-filters'),elTableWrap=$('table-wrap');
+const elRowCount=$('row-count'),elHead=$('table-head'),elBody=$('table-body');
+
+// CSV parser
+function parseCSV(t){const R=[];let r=[],c='',q=false;for(let i=0;i<t.length;i++){const ch=t[i],nx=t[i+1];
+if(q){if(ch==='"'&&nx==='"'){c+='"';i++}else if(ch==='"')q=false;else c+=ch}
+else{if(ch==='"')q=true;else if(ch===','){r.push(c.trim());c=''}
+else if(ch==='\r'&&nx==='\n'){r.push(c.trim());R.push(r);r=[];c='';i++}
+else if(ch==='\n'){r.push(c.trim());R.push(r);r=[];c=''}else c+=ch}}
+if(c.length||r.length){r.push(c.trim());R.push(r)}
+while(R.length&&R[R.length-1].every(v=>v===''))R.pop();return R}
+
+function toNumber(v){if(v==null||v==='')return null;const c=String(v).replace(/\s/g,'').replace(',','.');
+if(!/^-?\d+(\.\d+)?$/.test(c))return null;const n=parseFloat(c);return isNaN(n)?null:n}
+function detectNumericCols(h,rows){const s=new Set();h.forEach((_,i)=>{let t=0,nc=0;
+for(const r of rows){const v=r[i];if(v==null||v==='')continue;t++;if(toNumber(v)!==null)nc++}
+if(t>0&&nc/t>=.8)s.add(i)});return s}
+function findColumn(...needles){for(const n of needles){const lc=n.toLowerCase();
+const i=state.headers.findIndex(h=>h&&h.toLowerCase().includes(lc));if(i>=0)return i}return -1}
+const fmtFull=n=>n==null?'—':new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n);
+function fmtShortParts(n){if(n==null)return{num:'—',unit:''};const a=Math.abs(n);
+if(a>=1e9)return{num:(n/1e9).toFixed(2).replace('.',','),unit:' млрд'};
+if(a>=1e6)return{num:(n/1e6).toFixed(2).replace('.',','),unit:' млн'};
+if(a>=1e3)return{num:(n/1e3).toFixed(1).replace('.',','),unit:' тыс'};
+return{num:new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(n),unit:''}}
+function fmtShort(n){const p=fmtShortParts(n);return p.num+p.unit}
+const escHtml=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function pluralRow(n){const v=n%100;if(v>=11&&v<=19)return 'строк';const r=v%10;
+if(r===1)return 'строка';if(r>=2&&r<=4)return 'строки';return 'строк'}
+const norm=v=>String(v||'').toLowerCase().trim();
+function statusKind(s){const n=norm(s);if(POS_SET.has(n))return'pos';if(NEG_SET.has(n))return'neg';return''}
+function statusColor(s,fi=0){const n=norm(s);
+if(POS_SET.has(n)){const g=['#059669','#10b981','#22c55e','#34d399','#6ee7b7'];return g[POSITIVE_STATUSES.indexOf(n)%g.length]}
+if(NEG_SET.has(n)){const r=['#dc2626','#ef4444','#f87171','#fb923c','#f59e0b','#fbbf24','#a855f7','#ec4899'];return r[NEGATIVE_STATUSES.indexOf(n)%r.length]}
+return PALETTE[fi%PALETTE.length]}
+
+function applyFilters(rows,exceptCol=null){const q=state.search.toLowerCase().trim();
+return rows.filter(r=>{for(const[col,set]of state.filters){if(col===exceptCol)continue;
+const v=(r[col]||'').trim()||'—';if(!set.has(v))return false}
+if(q&&!r.some(c=>String(c).toLowerCase().includes(q)))return false;return true})}
+
+function applySort(rows){if(state.sortCol==null)return rows;const col=state.sortCol;
+const isNum=state.numericCols.has(col);const sign=state.sortDir==='asc'?1:-1;
+return[...rows].sort((a,b)=>{const va=a[col]||'',vb=b[col]||'';
+if(isNum){const na=toNumber(va),nb=toNumber(vb);if(na==null&&nb==null)return 0;
+if(na==null)return 1;if(nb==null)return-1;return(na-nb)*sign}return va.localeCompare(vb,'ru')*sign})}
+
+function toggleFilter(colIdx,value){if(!state.filters.has(colIdx))state.filters.set(colIdx,new Set());
+const set=state.filters.get(colIdx);if(set.has(value))set.delete(value);else set.add(value);
+if(set.size===0)state.filters.delete(colIdx);
+if(colIdx===state.statusCol)syncGlobalFilterToRatingStatuses();onFiltersChanged()}
+
+function clearAllFilters(){state.filters.clear();state.search='';elSearch.value='';closeAllDropdowns();
+state.ratingStatuses=new Set(POSITIVE_STATUSES);state.antiRatingStatuses=new Set(NEGATIVE_STATUSES);onFiltersChanged()}
+
+function syncRatingStatusesToGlobalFilter(){if(state.statusCol<0)return;
+const combined=new Set([...state.ratingStatuses,...state.antiRatingStatuses]);
+const all=[...POSITIVE_STATUSES,...NEGATIVE_STATUSES];
+if(all.every(s=>combined.has(s))){state.filters.delete(state.statusCol)}
+else if(combined.size===0){state.filters.set(state.statusCol,new Set(['__none__']))}
+else{const actual=new Set();for(const s of combined){const a=state.statusCaseMap.get(s);if(a)actual.add(a)}
+if(actual.size>0)state.filters.set(state.statusCol,actual)}}
+
+function syncGlobalFilterToRatingStatuses(){const af=state.filters.get(state.statusCol);
+if(!af){state.ratingStatuses=new Set(POSITIVE_STATUSES);state.antiRatingStatuses=new Set(NEGATIVE_STATUSES)}
+else{const lw=new Set([...af].map(v=>norm(v)));
+state.ratingStatuses=new Set(POSITIVE_STATUSES.filter(s=>lw.has(s)));
+state.antiRatingStatuses=new Set(NEGATIVE_STATUSES.filter(s=>lw.has(s)))}}
+
+// Dropdown factory
+function closeAllDropdowns(){document.querySelectorAll('.dropdown.open').forEach(d=>d.classList.remove('open'))}
+document.addEventListener('click',e=>{if(!e.target.closest('.dropdown'))closeAllDropdowns()});
+
+function createDropdown(opts){const{label,getOptions,getSelected,onToggle,onClear,showSearch=false,colorize=false,width=320}=opts;
+let sq='';const c=document.createElement('div');c.className='dropdown';
+c.innerHTML=`<button class="dropdown-trigger" type="button"><span class="dropdown-label-wrap">
+<span class="dropdown-label-text">${escHtml(label)}</span><span class="dropdown-badge" hidden>0</span>
+</span><span class="dropdown-arrow">▼</span></button>
+<div class="dropdown-panel" style="width:${width}px">
+${showSearch?'<div class="dropdown-search"><input type="text" placeholder="🔍  Поиск..." autocomplete="off" /></div>':''}
+<div class="dropdown-options"></div>
+<div class="dropdown-footer"><button class="dropdown-clear" type="button">Очистить</button>
+<span class="dropdown-info"></span></div></div>`;
+const trigger=c.querySelector('.dropdown-trigger'),badge=c.querySelector('.dropdown-badge');
+const panel=c.querySelector('.dropdown-panel'),optEl=c.querySelector('.dropdown-options');
+const clrBtn=c.querySelector('.dropdown-clear'),infoEl=c.querySelector('.dropdown-info');
+const sInp=showSearch?c.querySelector('.dropdown-search input'):null;
+
+function refresh(){const allOpts=getOptions();const selected=getSelected();
+const q=sq.toLowerCase().trim();const filtered=q?allOpts.filter(([v])=>String(v).toLowerCase().includes(q)):allOpts;
+if(!filtered.length){optEl.innerHTML='<div class="dropdown-empty">Ничего не найдено</div>'}
+else{optEl.innerHTML=filtered.map(([v,cnt])=>{const k=colorize?statusKind(v):'';const sel=selected.has(v);
+return`<div class="dropdown-option ${k} ${sel?'selected':''}" data-val="${escHtml(v)}">
+<span class="checkmark">✓</span><span class="label" title="${escHtml(v)}">${escHtml(v)}</span>
+<span class="count">${cnt}</span></div>`}).join('');
+optEl.querySelectorAll('.dropdown-option').forEach(o=>o.addEventListener('click',()=>onToggle(o.dataset.val)))}
+if(!selected.size){badge.hidden=true;c.classList.remove('has-selection');clrBtn.disabled=true}
+else{badge.hidden=false;badge.textContent=selected.size;c.classList.add('has-selection');clrBtn.disabled=false}
+infoEl.textContent=`${selected.size} из ${allOpts.length}`}
+
+trigger.addEventListener('click',e=>{e.stopPropagation();const w=c.classList.contains('open');
+closeAllDropdowns();if(!w){c.classList.add('open');if(sInp)setTimeout(()=>sInp.focus(),30)}});
+panel.addEventListener('click',e=>e.stopPropagation());
+if(sInp)sInp.addEventListener('input',e=>{sq=e.target.value;refresh()});
+clrBtn.addEventListener('click',e=>{e.stopPropagation();if(onClear)onClear()});
+refresh();return{el:c,refresh}}
+
+const refreshCallbacks=[];
+function onFiltersChanged(scroll=true){renderKPIs();renderDonut();renderStatusGroups();renderActiveFilters();renderTable();
+refreshCallbacks.forEach(fn=>fn());elClearBtn.hidden=!(state.filters.size>0||state.search);
+updateMapLegendState();updateMapFilters();
+}
+
+function renderKPIs(){const filtered=applyFilters(state.rows);const cards=[];
+cards.push({label:'Всего домов',parts:{num:fmtFull(filtered.length),unit:''},
+sub:filtered.length!==state.rows.length?`из <b>${fmtFull(state.rows.length)}</b> в источнике`:'',color:PALETTE[0]});
+if(state.districtCol>=0){const u=new Set();for(const r of filtered){const v=(r[state.districtCol]||'').trim();if(v)u.add(v)}
+cards.push({label:'Округа',parts:{num:String(u.size),unit:''},sub:'',color:'#8b5cf6'})}
+const numCols=[...state.numericCols].filter(i=>{const h=(state.headers[i]||'').toLowerCase().trim();
+return!(h==='№'||h==='n'||h==='#')&&!h.includes('дотац')&&!h.includes('год')}).slice(0,2);
+numCols.forEach((ci,i)=>{let sum=0,cnt=0;for(const r of filtered){const n=toNumber(r[ci]);if(n!=null){sum+=n;cnt++}}
+cards.push({label:`Σ  ${state.headers[ci]}`,parts:fmtShortParts(sum),sub:'',color:PALETTE[(i+2)%PALETTE.length]})});
+elKpiGrid.innerHTML=cards.map(c=>`<div class="kpi-card" style="--c-accent:${c.color}">
+<div class="kpi-label">${escHtml(c.label)}</div>
+<div class="kpi-value">${c.parts.num}${c.parts.unit?`<span class="kpi-unit">${c.parts.unit}</span>`:''}</div>
+${c.sub?`<div class="kpi-sub">${c.sub}</div>`:''}</div>`).join('')}
+
+function renderFilters(){elFilterRow.innerHTML='';
+const lbl=document.createElement('span');lbl.className='filter-section-label';lbl.textContent='Фильтры';elFilterRow.appendChild(lbl);
+if(state.districtCol>=0){const dd=createDropdown({label:'Городской округ',showSearch:true,width:320,
+getOptions:()=>{const c=new Map();for(const r of state.rows){const v=(r[state.districtCol]||'').trim()||'—';c.set(v,(c.get(v)||0)+1)}return[...c.entries()].sort((a,b)=>b[1]-a[1])},
+getSelected:()=>state.filters.get(state.districtCol)||new Set(),
+onToggle:v=>toggleFilter(state.districtCol,v),
+onClear:()=>{if(state.filters.has(state.districtCol)){state.filters.delete(state.districtCol);onFiltersChanged()}}});
+elFilterRow.appendChild(dd.el);refreshCallbacks.push(dd.refresh)}
+if(state.statusCol>=0){const dd=createDropdown({label:'Статус',colorize:true,width:300,
+getOptions:()=>{const c=new Map();for(const r of state.rows){const v=(r[state.statusCol]||'').trim()||'—';c.set(v,(c.get(v)||0)+1)}return[...c.entries()].sort((a,b)=>b[1]-a[1])},
+getSelected:()=>state.filters.get(state.statusCol)||new Set(),
+onToggle:v=>toggleFilter(state.statusCol,v),
+onClear:()=>{if(state.filters.has(state.statusCol)){state.filters.delete(state.statusCol);onFiltersChanged()}}});
+elFilterRow.appendChild(dd.el);refreshCallbacks.push(dd.refresh)}
+if(state.yearCol>=0){const div=document.createElement('span');div.className='filter-divider';elFilterRow.appendChild(div);
+const yl=document.createElement('span');yl.className='filter-section-label';yl.textContent='Год дотации';elFilterRow.appendChild(yl);
+const g=document.createElement('div');g.className='chip-group';elFilterRow.appendChild(g);
+function rebuildYearChips(){const c=new Map();for(const r of state.rows){const v=(r[state.yearCol]||'').trim()||'—';c.set(v,(c.get(v)||0)+1)}
+const entries=[...c.entries()].sort((a,b)=>a[0].localeCompare(b[0]));const active=state.filters.get(state.yearCol)||new Set();
+g.innerHTML=entries.map(([v,cnt])=>`<button class="chip ${active.has(v)?'active':''}" data-val="${escHtml(v)}">${escHtml(v)}<span class="chip-count">${cnt}</span></button>`).join('');
+g.querySelectorAll('.chip').forEach(ch=>ch.addEventListener('click',()=>toggleFilter(state.yearCol,ch.dataset.val)))}
+rebuildYearChips();refreshCallbacks.push(rebuildYearChips)}}
+
+function renderDonut(){if(state.statusCol<0){elCharts.innerHTML='';return}
+const baseRows=applyFilters(state.rows,state.statusCol);const counts=new Map();
+for(const r of baseRows){const v=(r[state.statusCol]||'').trim()||'—';counts.set(v,(counts.get(v)||0)+1)}
+const groups=[...counts.entries()].map(([l,c],i,a)=>({label:l,count:c,color:statusColor(l,a.findIndex(([x])=>x===l))})).sort((a,b)=>b.count-a.count);
+const total=groups.reduce((s,g)=>s+g.count,0)||1;const r=65,cx=80,cy=80,C=2*Math.PI*r;
+const af=state.filters.get(state.statusCol);const hasF=af&&af.size>0;let offset=0;
+const segs=groups.map(g=>{const len=(g.count/total)*C;const isSel=af?af.has(g.label):false;
+const seg={...g,da:`${len} ${C-len}`,doff:-offset,isSel,op:hasF&&!isSel?.25:1};offset+=len;return seg});
+const selTotal=hasF?segs.filter(s=>s.isSel).reduce((a,s)=>a+s.count,0):total;
+const bg=getComputedStyle(document.documentElement).getPropertyValue('--bg-elev').trim();
+elCharts.innerHTML=`<div class="card"><div class="card-title">Распределение по <span class="em">статусам</span></div>
+<div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap"><div>
+<svg class="donut-svg" width="160" height="160" viewBox="0 0 160 160">
+<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${bg}" stroke-width="20"/>
+${segs.map(s=>`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.color}" stroke-width="20"
+stroke-opacity="${s.op}" stroke-dasharray="${s.da}" stroke-dashoffset="${s.doff}"
+transform="rotate(-90 ${cx} ${cy})" style="transition:stroke-dasharray .6s,stroke-dashoffset .6s,stroke-opacity .3s"/>`).join('')}
+<text x="${cx}" y="${cy-2}" text-anchor="middle" class="donut-center">${selTotal}</text>
+<text x="${cx}" y="${cy+16}" text-anchor="middle" class="donut-center-label">${hasF?'выбрано':'записей'}</text></svg>
+<div class="donut-hint">↓ Клик по строке — выбрать несколько статусов</div></div>
+<div class="legend" style="flex:1">${segs.map(s=>`<div class="legend-row ${s.isSel?'selected':''} ${hasF&&!s.isSel?'dimmed':''}" data-val="${escHtml(s.label)}">
+<span class="legend-check">✓</span><span class="legend-swatch" style="background:${s.color}"></span>
+<span class="legend-label" title="${escHtml(s.label)}">${escHtml(s.label)}</span>
+<span class="legend-value">${s.count}</span></div>`).join('')}</div></div></div>`;
+elCharts.querySelectorAll('.legend-row').forEach(row=>row.addEventListener('click',()=>toggleFilter(state.statusCol,row.dataset.val)))}
+
+// === ТРИ КАРТОЧКИ: ИСПОЛНЕНО / ПРИОРИТЕТ / НПО ===
+// Проверяем: активна ли группа (все её статусы выбраны в фильтре)
+function isGroupActive(grp){
+  const af=state.filters.get(state.statusCol);
+  if(!af||af.size===0)return false;
+  return grp.statuses.some(s=>{
+    const actual=state.statusCaseMap.get(s);
+    return actual&&af.has(actual);
+  });
+}
+
+// Переключить фильтр по группе статусов
+function toggleGroupFilter(grp){
+  if(!state.filters.has(state.statusCol))state.filters.set(state.statusCol,new Set());
+  const set=state.filters.get(state.statusCol);
+  const active=isGroupActive(grp);
+  if(active){
+    // Убрать все статусы этой группы
+    grp.statuses.forEach(s=>{const a=state.statusCaseMap.get(s);if(a)set.delete(a)});
+  }else{
+    // Добавить все статусы этой группы
+    grp.statuses.forEach(s=>{const a=state.statusCaseMap.get(s);if(a)set.add(a)});
+  }
+  if(set.size===0)state.filters.delete(state.statusCol);
+  if(state.statusCol>=0)syncGlobalFilterToRatingStatuses();
+  onFiltersChanged();
+}
+
+// Переключить один статус
+function toggleSingleStatus(statusName){
+  const actual=state.statusCaseMap.get(statusName);
+  if(!actual)return;
+  if(!state.filters.has(state.statusCol))state.filters.set(state.statusCol,new Set());
+  const set=state.filters.get(state.statusCol);
+  if(set.has(actual))set.delete(actual);else set.add(actual);
+  if(set.size===0)state.filters.delete(state.statusCol);
+  if(state.statusCol>=0)syncGlobalFilterToRatingStatuses();
+  onFiltersChanged();
+}
+
+function renderStatusGroups(){if(state.statusCol<0){elSgGrid.innerHTML='';return}
+const filtered=applyFilters(state.rows);
+elSgGrid.innerHTML=STATUS_GROUPS.map(grp=>{
+const matchRows=filtered.filter(r=>grp.statuses.includes(norm(r[state.statusCol])));
+const count=matchRows.length;
+let volSum=0,costSum=0;
+for(const r of matchRows){
+if(state.volumeCol>=0){const n=toNumber(r[state.volumeCol]);if(n!=null)volSum+=n}
+if(state.costCol>=0){const n=toNumber(r[state.costCol]);if(n!=null)costSum+=n}}
+const volP=fmtShortParts(volSum),costP=fmtShortParts(costSum);
+const perStatus=grp.statuses.map(s=>{let cnt=0;for(const r of matchRows)if(norm(r[state.statusCol])===s)cnt++;return{name:s,count:cnt}}).filter(x=>x.count>0).sort((a,b)=>b.count-a.count);
+const active=isGroupActive(grp);
+return`<div class="card sg-card ${active?'sg-active':''}" data-group-id="${grp.id}" style="--sg-color:${grp.color};--sg-color-light:${grp.colorLight}">
+<div class="sg-header" data-group-id="${grp.id}"><div class="sg-title">${escHtml(grp.title)}</div>
+<div class="sg-count">${count}<span class="sg-unit">шт.</span></div></div>
+<div class="sg-metrics">
+${state.volumeCol>=0?`<div class="sg-metric"><div class="sg-metric-label">Объём</div>
+<div class="sg-metric-value">${volP.num}<span class="sg-metric-unit">${volP.unit} м³</span></div></div>`:''}
+${state.costCol>=0?`<div class="sg-metric"><div class="sg-metric-label">Стоимость</div>
+<div class="sg-metric-value">${costP.num}<span class="sg-metric-unit">${costP.unit} ₽</span></div></div>`:''}
+</div>
+<div class="sg-status-list">${(()=>{const maxC=Math.max(...perStatus.map(s=>s.count),1);return perStatus.map(s=>{
+const w=(s.count/maxC*100).toFixed(1);
+const af=state.filters.get(state.statusCol);
+const actual=state.statusCaseMap.get(s.name);
+const isSel=af&&actual&&af.has(actual);
+return`<div class="sg-status-row${isSel?' sg-active':''}" data-status="${escHtml(s.name)}" style="${isSel?'background:var(--bg-hover);':''}">
+<div class="sg-status-name" title="${escHtml(s.name)}">${escHtml(s.name)}</div>
+<div class="sg-bar-track"><div class="sg-bar-fill" style="width:${w}%"></div></div>
+<div class="sg-status-count">${s.count}</div></div>`}).join('')})()}</div></div>`}).join('');
+
+// Клик по заголовку карточки — фильтр по всей группе
+elSgGrid.querySelectorAll('.sg-header[data-group-id]').forEach(h=>{
+  h.addEventListener('click',()=>{
+    const grp=STATUS_GROUPS.find(g=>g.id===h.dataset.groupId);
+    if(grp)toggleGroupFilter(grp);
+  });
+});
+
+// Клик по отдельному статусу
+elSgGrid.querySelectorAll('.sg-status-row[data-status]').forEach(row=>{
+  row.addEventListener('click',()=>toggleSingleStatus(row.dataset.status));
+});
+}
+
+// Клик по легенде карты
+document.querySelectorAll('.map-legend-item[data-group]').forEach(item=>{
+  item.addEventListener('click',()=>{
+    const grp=STATUS_GROUPS.find(g=>g.id===item.dataset.group);
+    if(grp)toggleGroupFilter(grp);
+  });
+});
+
+// Обновляем подсветку легенды карты при изменении фильтров
+function updateMapLegendState(){
+  document.querySelectorAll('.map-legend-item[data-group]').forEach(item=>{
+    const grp=STATUS_GROUPS.find(g=>g.id===item.dataset.group);
+    if(grp){item.classList.toggle('active',isGroupActive(grp))}
+  });
+}
+
+// === Рейтинги ===
+function computeDistrictStats(activeStatuses){const base=applyFilters(state.rows,state.statusCol);const map=new Map();
+for(const r of base){const st=norm(r[state.statusCol]);if(!activeStatuses.has(st))continue;
+const d=(r[state.districtCol]||'').trim()||'—';if(!map.has(d))map.set(d,{count:0,volume:0,cost:0});const g=map.get(d);
+g.count++;if(state.volumeCol>=0){const v=toNumber(r[state.volumeCol]);if(v!=null)g.volume+=v}
+if(state.costCol>=0){const v=toNumber(r[state.costCol]);if(v!=null)g.cost+=v}}
+return[...map.entries()].map(([l,m])=>({label:l,...m}))}
+
+function buildRatingCard(kind){const isPos=kind==='pos';
+const title=isPos?'▲ Рейтинг округов':'▼ Антирейтинг округов';
+const subtitle=isPos?'статусы с положительной динамикой':'проблемные статусы и обременения';
+const fixedList=isPos?POSITIVE_STATUSES:NEGATIVE_STATUSES;
+const card=document.createElement('div');card.className=`card rating-card ${kind}`;
+card.innerHTML=`<div class="rating-header"><div class="rating-title">${title}</div>
+<div class="rating-subtitle">${subtitle}</div></div>
+<div class="rating-controls"></div><div class="rating-summary"></div><div class="bar-list"></div>`;
+const controlsEl=card.querySelector('.rating-controls');
+const summaryEl=card.querySelector('.rating-summary');const barsEl=card.querySelector('.bar-list');
+
+const statusDropdown=createDropdown({label:'Статусы',colorize:true,width:280,
+getOptions:()=>fixedList.map(s=>{let c=0;for(const r of state.rows)if(norm(r[state.statusCol])===s)c++;return[s,c]}),
+getSelected:()=>isPos?state.ratingStatuses:state.antiRatingStatuses,
+onToggle:v=>{const set=isPos?state.ratingStatuses:state.antiRatingStatuses;
+if(set.has(v))set.delete(v);else set.add(v);syncRatingStatusesToGlobalFilter();onFiltersChanged()},
+onClear:()=>{const set=isPos?state.ratingStatuses:state.antiRatingStatuses;set.clear();syncRatingStatusesToGlobalFilter();onFiltersChanged()}});
+controlsEl.appendChild(statusDropdown.el);
+
+const tabsEl=document.createElement('div');tabsEl.className='metric-tabs';controlsEl.appendChild(tabsEl);
+
+function renderTabs(){const cur=isPos?state.ratingMetric:state.antiRatingMetric;
+tabsEl.innerHTML=RATING_METRICS.map(m=>{if(m.id==='volume'&&state.volumeCol<0)return'';
+if(m.id==='cost'&&state.costCol<0)return'';
+return`<button class="metric-tab ${m.id===cur?'active':''}" data-metric="${m.id}">${m.label}</button>`}).join('');
+tabsEl.querySelectorAll('.metric-tab').forEach(b=>b.addEventListener('click',()=>{
+if(isPos)state.ratingMetric=b.dataset.metric;else state.antiRatingMetric=b.dataset.metric;renderTabs();renderBody()}))}
+
+function renderBody(){const as=isPos?state.ratingStatuses:state.antiRatingStatuses;
+const metric=isPos?state.ratingMetric:state.antiRatingMetric;const stats=computeDistrictStats(as);
+const totals=stats.reduce((a,s)=>({count:a.count+s.count,volume:a.volume+s.volume,cost:a.cost+s.cost}),{count:0,volume:0,cost:0});
+const vp=fmtShortParts(totals.volume),cp=fmtShortParts(totals.cost);
+summaryEl.innerHTML=`<div class="rating-stat"><div class="rating-stat-label">Записей</div>
+<div class="rating-stat-value">${fmtFull(totals.count)}</div></div>
+${state.volumeCol>=0?`<div class="rating-stat"><div class="rating-stat-label">Объём</div>
+<div class="rating-stat-value">${vp.num}<span class="rating-stat-unit">${vp.unit} м³</span></div></div>`:''}
+${state.costCol>=0?`<div class="rating-stat"><div class="rating-stat-label">Стоимость</div>
+<div class="rating-stat-value">${cp.num}<span class="rating-stat-unit">${cp.unit} ₽</span></div></div>`:''}`;
+
+const sorted=stats.filter(s=>s[metric]>0).sort((a,b)=>b[metric]-a[metric]);
+if(!sorted.length){barsEl.innerHTML='<div class="rating-empty">Нет данных по выбранным статусам</div>';return}
+const maxVal=Math.max(...sorted.map(s=>s[metric]),1);
+barsEl.innerHTML=sorted.map((s,i)=>{const v=s[metric];const w=(v/maxVal*100).toFixed(1);
+const isDA=state.filters.has(state.districtCol)&&state.filters.get(state.districtCol).has(s.label);
+let pri='';if(metric==='count')pri=`${fmtFull(v)}<span class="unit"> шт.</span>`;
+else if(metric==='volume'){const p=fmtShortParts(v);pri=`${p.num}<span class="unit">${p.unit} м³</span>`}
+else{const p=fmtShortParts(v);pri=`${p.num}<span class="unit">${p.unit} ₽</span>`}
+const extras=[];if(metric!=='count')extras.push(`${fmtFull(s.count)} шт.`);
+if(metric!=='volume'&&state.volumeCol>=0){const p=fmtShortParts(s.volume);extras.push(`${p.num}${p.unit} м³`)}
+if(metric!=='cost'&&state.costCol>=0){const p=fmtShortParts(s.cost);extras.push(`${p.num}${p.unit} ₽`)}
+return`<div class="bar-row ${isDA?'active':''}" data-district="${escHtml(s.label)}">
+<div class="bar-name" title="${escHtml(s.label)}"><span class="bar-rank">${i+1}.</span>${escHtml(s.label)}</div>
+<div class="bar-track"><div class="bar-fill ${kind}" style="width:${w}%"></div></div>
+<div class="bar-values"><div class="bar-primary">${pri}</div>
+<div class="bar-secondary">${extras.join(' · ')}</div></div></div>`}).join('');
+barsEl.querySelectorAll('.bar-row').forEach(r=>r.addEventListener('click',()=>toggleFilter(state.districtCol,r.dataset.district)))}
+renderTabs();renderBody();return{el:card,refresh:()=>{statusDropdown.refresh();renderTabs();renderBody()}}}
+
+function renderRatings(){elRating.innerHTML='';if(state.districtCol<0||state.statusCol<0)return;
+const p=buildRatingCard('pos'),n=buildRatingCard('neg');
+elRating.appendChild(p.el);elRating.appendChild(n.el);
+refreshCallbacks.push(p.refresh);refreshCallbacks.push(n.refresh)}
+
+function renderActiveFilters(){const hasF=state.filters.size>0||state.search;
+if(!hasF){elActiveFilters.innerHTML='';return}
+const cn={};if(state.districtCol>=0)cn[state.districtCol]='Округ';
+if(state.statusCol>=0)cn[state.statusCol]='Статус';if(state.yearCol>=0)cn[state.yearCol]='Год';
+const tags=[];for(const[col,set]of state.filters){const g=cn[col]||state.headers[col]||`#${col}`;
+for(const val of set)tags.push({col,val,group:g})}
+if(state.search)tags.push({col:-1,val:state.search,group:'Поиск'});
+const filtered=applyFilters(state.rows);
+elActiveFilters.innerHTML=`<div class="active-filters">
+<span class="active-filters-label">🔽 Фильтры (${filtered.length} ${pluralRow(filtered.length)}):</span>
+${tags.map(t=>`<span class="active-tag" data-col="${t.col}" data-val="${escHtml(t.val)}">
+<span class="tag-group">${escHtml(t.group)}:</span> ${escHtml(t.val)}
+<button class="tag-remove" title="Убрать">×</button></span>`).join('')}</div>`;
+elActiveFilters.querySelectorAll('.tag-remove').forEach(btn=>btn.addEventListener('click',e=>{
+e.stopPropagation();const tag=btn.closest('.active-tag');const col=+tag.dataset.col;const val=tag.dataset.val;
+if(col===-1){state.search='';elSearch.value=''}else{const set=state.filters.get(col);
+if(set){set.delete(val);if(!set.size)state.filters.delete(col)}}onFiltersChanged(false)}))}
+
+function renderTable(){const{headers,rows,numericCols,sortCol,sortDir,statusCol}=state;
+const visible=applySort(applyFilters(rows));
+elHead.innerHTML=`<tr><th>#</th>${headers.map((h,i)=>{const isNum=numericCols.has(i);const isSorted=sortCol===i;
+const arrow=isSorted?(sortDir==='asc'?'▲':'▼'):'⇅';
+return`<th class="${isNum?'numeric':''} ${isSorted?'sorted':''}" data-col="${i}" title="Сортировать">
+${escHtml(h)}<span class="sort-ind">${arrow}</span></th>`}).join('')}</tr>`;
+elHead.querySelectorAll('th[data-col]').forEach(th=>th.addEventListener('click',()=>{
+const col=+th.dataset.col;if(state.sortCol===col)state.sortDir=state.sortDir==='asc'?'desc':'asc';
+else{state.sortCol=col;state.sortDir='asc'}renderTable()}));
+if(!visible.length){elBody.innerHTML='<tr><td colspan="999"><div class="empty-state"><div class="icon">🔍</div><div>Ничего не найдено по текущим фильтрам</div></div></td></tr>'}
+else{elBody.innerHTML=visible.map((row,idx)=>`<tr><td class="row-num">${idx+1}</td>
+${headers.map((_,ci)=>{const v=row[ci]!==undefined?row[ci]:'';const num=numericCols.has(ci);
+if(ci===statusCol&&v){const k=statusKind(v);return`<td title="${escHtml(v)}"><span class="status-badge ${k}">${escHtml(v)}</span></td>`}
+const d=num&&toNumber(v)!=null?fmtFull(toNumber(v)):v;
+return`<td class="${num?'numeric':''}" title="${escHtml(v)}">${escHtml(d)}</td>`}).join('')}</tr>`).join('')}
+const total=rows.length;elRowCount.innerHTML=visible.length===total
+?`Показано <strong>${fmtFull(total)}</strong> ${pluralRow(total)}, <strong>${headers.length}</strong> столбцов`
+:`Показано <strong>${fmtFull(visible.length)}</strong> из <strong>${fmtFull(total)}</strong> ${pluralRow(total)}`}
+
+function renderAll(){refreshCallbacks.length=0;renderKPIs();renderFilters();renderDonut();
+renderStatusGroups();renderRatings();renderActiveFilters();renderTable();
+elClearBtn.hidden=!(state.filters.size>0||state.search)}
+
+async function fetchData(){elSpinner.classList.add('active');elStatus.className='status-ok';elStatus.textContent='●';
+try{const res=await fetch(`${CSV_URL}&_=${Date.now()}`,{cache:'no-store'});
+if(!res.ok)throw new Error(`HTTP ${res.status}`);const text=await res.text();
+if(!text.trim())throw new Error('Пустой ответ');const parsed=parseCSV(text);
+if(parsed.length<2)throw new Error('Нет данных');
+state.headers=parsed[0];state.rows=parsed.slice(1);state.numericCols=detectNumericCols(state.headers,state.rows);
+state.districtCol=findColumn('округ');state.statusCol=findColumn('статус');
+state.yearCol=findColumn('дотац','год');state.volumeCol=findColumn('объем','объём','куб.м','куб');
+state.costCol=findColumn('стоимость','стоим');
+state.statusCaseMap=new Map();if(state.statusCol>=0)for(const r of state.rows){const v=(r[state.statusCol]||'').trim();if(v)state.statusCaseMap.set(norm(v),v)}
+renderAll();elErrBar.classList.remove('visible');elStatus.className='status-ok';elStatus.textContent='✔'}
+catch(err){console.error('[Dashboard]',err);elErrMsg.textContent=`Ошибка: ${err.message}`;
+elErrBar.classList.add('visible');elStatus.className='status-err';elStatus.textContent='✖'}
+finally{elSpinner.classList.remove('active');elLastUpd.textContent=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}}
+
+let countdownSec=REFRESH_INTERVAL/1000;
+function fmtCountdown(s){
+  const h=Math.floor(s/3600);const m=Math.floor((s%3600)/60);const sec=s%60;
+  if(h>0)return h+'ч '+m+'м';
+  if(m>0)return m+'м '+sec+'с';
+  return sec+'с';
+}
+function startCountdown(){countdownSec=REFRESH_INTERVAL/1000;
+const t=setInterval(()=>{countdownSec--;if(countdownSec<=0){clearInterval(t);elNextUpd.textContent='…'}
+else elNextUpd.textContent=fmtCountdown(countdownSec)},1000);return t}
+
+elSearch.addEventListener('input',e=>{state.search=e.target.value;onFiltersChanged(false)});
+elClearBtn.addEventListener('click',clearAllFilters);
+
+// Кнопка ручного обновления
+document.getElementById('refresh-btn').addEventListener('click',function(){
+  clearInterval(timer);
+  fetchData();
+  timer=startCountdown();
+});
+
+document.getElementById('reset-btn').addEventListener('click',function(){
+  clearAllFilters();
+});
+
+document.getElementById('excel-btn').addEventListener('click',function(){
+  var filtered=applySort(applyFilters(state.rows));
+  if(!filtered.length){alert('Нет данных для выгрузки');return}
+  var data=[state.headers];
+  for(var i=0;i<filtered.length;i++){data.push(filtered[i])}
+  var ws=XLSX.utils.aoa_to_sheet(data);
+  // Автоширина столбцов
+  var colWidths=state.headers.map(function(h,ci){
+    var max=h.length;
+    for(var ri=0;ri<filtered.length;ri++){
+      var v=filtered[ri][ci]||'';
+      if(String(v).length>max)max=String(v).length;
+    }
+    return{wch:Math.min(max+2,50)};
+  });
+  ws['!cols']=colWidths;
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Данные');
+  var now=new Date();
+  var fname='dashboard_'+now.getFullYear()+'-'+(now.getMonth()+1<10?'0':'')+(now.getMonth()+1)+'-'+(now.getDate()<10?'0':'')+now.getDate()+'.xlsx';
+  XLSX.writeFile(wb,fname);
+});
+
+fetchData();let timer=startCountdown();
+setInterval(()=>{fetchData();clearInterval(timer);timer=startCountdown()},REFRESH_INTERVAL);
+
+// ═══════════════════════════════════════════════════════════════════════
+// ЯНДЕКС КАРТА: дома со статусом «снесен»
+// ═══════════════════════════════════════════════════════════════════════
+let ymap=null;
+let mapReady=false;
+let lastMapHash='';
+
+ymaps.ready(function(){
+  ymap=new ymaps.Map('ymap',{center:[55.75,38.5],zoom:8,
+    controls:['zoomControl','fullscreenControl','typeSelector']});
+
+  // Создаём обёртку для кнопок снаружи #ymap
+  var ymapEl=document.getElementById('ymap');
+  var mapWrap=document.createElement('div');
+  mapWrap.style.cssText='position:relative;width:100%;';
+  ymapEl.parentNode.insertBefore(mapWrap,ymapEl);
+  mapWrap.appendChild(ymapEl);
+  var mapContainer=mapWrap;
+
+  // Своя кнопка переключения типа карты
+  var mapTypePanel=document.createElement('div');
+  mapTypePanel.style.cssText='position:absolute;top:10px;right:10px;z-index:1000;display:flex;'+
+    'border-radius:6px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.2)';
+  var types=[['yandex#map','Схема'],['yandex#satellite','Спутник'],['yandex#hybrid','Гибрид']];
+  var currentType='yandex#map';
+  types.forEach(function(t){
+    var btn=document.createElement('button');
+    btn.textContent=t[1];btn.dataset.type=t[0];
+    btn.style.cssText='padding:6px 12px;border:none;cursor:pointer;font-family:Manrope,sans-serif;'+
+      'font-size:12px;font-weight:600;transition:all .15s;'+
+      'background:'+(t[0]==='yandex#map'?'#0891b2':'#fff')+
+      ';color:'+(t[0]==='yandex#map'?'#fff':'#333');
+    btn.addEventListener('click',function(){
+      if(panoOn){panoOn=false;panoBtn2.style.background='#fff';panoBtn2.style.color='#333';}
+      ymap.setType(t[0]);currentType=t[0];
+      mapTypePanel.querySelectorAll('button').forEach(function(b){
+        var a=b.dataset.type===currentType;
+        b.style.background=a?'#0891b2':'#fff';b.style.color=a?'#fff':'#333';
+      });
+    });
+    mapTypePanel.appendChild(btn);
+  });
+  mapContainer.appendChild(mapTypePanel);
+
+  // Кнопка 📷 Панорама — снаружи #ymap, поэтому клики работают
+  var panoOn=false;
+  var panoBtn2=document.createElement('button');
+  panoBtn2.textContent='📷 Панорама';
+  panoBtn2.style.cssText='position:absolute;top:10px;left:10px;z-index:1000;padding:6px 12px;'+
+    'background:#fff;border:none;border-radius:6px;font-family:Manrope,sans-serif;'+
+    'font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.2);'+
+    'color:#333;transition:all .15s';
+  panoBtn2.addEventListener('click',function(){
+    panoOn=!panoOn;
+    if(panoOn){
+      ymap.setType('yandex#panorama');
+      panoBtn2.style.background='#0891b2';
+      panoBtn2.style.color='#fff';
+    }else{
+      ymap.setType(currentType);
+      panoBtn2.style.background='#fff';
+      panoBtn2.style.color='#333';
+    }
+  });
+  mapContainer.appendChild(panoBtn2);
+  mapReady=true;
+  if(state.rows.length>0)geocodeAllThenRender();
+});
+
+// Цвета маркеров по статусу
+const MAP_GREEN=['контракт заключен','опубликовано','снесен','снос своими силами','не подлежит сносу'];
+const MAP_YELLOW=['расселен','публикация'];
+const MAP_RED=['суд','розыск','подлежит расселению','запрет','сво','наследство'];
+const MAP_GREEN_SET=new Set(MAP_GREEN),MAP_YELLOW_SET=new Set(MAP_YELLOW),MAP_RED_SET=new Set(MAP_RED);
+
+function markerColor(status){
+  const s=norm(status);
+  if(MAP_GREEN_SET.has(s))return{preset:'islands#greenDotIcon',color:'#22c55e',label:'Исполнено'};
+  if(MAP_YELLOW_SET.has(s))return{preset:'islands#yellowDotIcon',color:'#f59e0b',label:'Приоритет'};
+  if(MAP_RED_SET.has(s))return{preset:'islands#redDotIcon',color:'#dc2626',label:'НПО'};
+  return{preset:'islands#grayDotIcon',color:'#94a3b8',label:'Прочее'};
+}
+
+// Кэш геокодирования: сохраняется в localStorage, запросы к API — только для новых адресов
+// Вшитые координаты (279 адресов, 0 запросов к API)
+const EMBEDDED_COORDS={"Московская область, Богородский, г. Ногинск, проезд. Истомкинский 1-й д. 14":{"lat":55.839668,"lon":38.399933},"Московская область, Богородский, МО, р-н. Ногинский, г. Ногинск, ул. 3 Интернационала, д. 232":{"lat":55.843141,"lon":38.405107},"Московская область, Богородский, МО, р-н. Ногинский, г. Ногинск, ул. 3 Интернационала, д. 234":{"lat":55.842908,"lon":38.404506},"Московская область, Богородский, г. Ногинск, ул. Жуковская 1-я, д. 5":{"lat":55.847103,"lon":38.412366},"Московская область, Богородский, г. Ногинск, ул. Советской Конституции, д. 23":{"lat":55.882732,"lon":38.451685},"Московская область, Богородский, г. Старая Купавна, проезд. Текстильщиков, д. 8":{"lat":55.806474,"lon":38.168877},"Московская область, Богородский, г. Старая Купавна, ул. Кирова, д. 12":{"lat":55.804987,"lon":38.179531},"Московская область, Богородский, г. Старая Купавна, ул. Кирова, д. 14":{"lat":55.8044,"lon":38.180008},"Московская область, Богородский, г. Старая Купавна, ул. Кирова, д. 6":{"lat":55.80657,"lon":38.178139},"Московская область, Богородский, г. Старая Купавна, ул. Кирова, д. 8":{"lat":55.806125,"lon":38.178561},"Московская область, Богородский, г. Старая Купавна, ул. Матросова, д. 6":{"lat":55.807253,"lon":38.181077},"Московская область, Богородский, г. Старая Купавна, ул. Октябрьская, д. 1":{"lat":55.806864,"lon":38.170108},"Московская область, Богородский, г. Старая Купавна, ул. Чапаева, д. 4":{"lat":55.806793,"lon":38.182262},"Московская область, Богородский, г. Старая Купавна, ул. Чапаева, д. 5":{"lat":55.806676,"lon":38.181696},"Московская область, Богородский, г. Старая Купавна, ул. Чапаева, д. 7":{"lat":55.806312,"lon":38.181948},"Московская область, Богородский, г. Старая Купавна, ул. Чапаева, д. 9":{"lat":55.805867,"lon":38.182334},"Московская область, Богородский, г. Старая Купавна, ул. Чехова, д. 1":{"lat":55.803939,"lon":38.181355},"Московская область, Богородский, г. Старая Купавна, ул. Шевченко, д. 7":{"lat":55.805968,"lon":38.185883},"Московская область, Богородский, д.Авдотьино, д. 2":{"lat":55.925818,"lon":38.233673},"Московская область, Богородский, г. Ногинск, ул. 8 Марта, д. 5":{"lat":55.877536,"lon":38.454892},"Московская область, Богородский, г. Ногинск, ул. Коммунистическая, д. 1":{"lat":55.872541,"lon":38.439136},"Московская область, Богородский, д. Караваево, ул. Спортивная, д. 3/4":{"lat":55.862565,"lon":38.587456},"Московская область, Волоколамский, г. Волоколамск, ул. Энтузиастов, д. 13":{"lat":55.989577,"lon":35.932531},"Московская область, Дмитровский, г. Яхрома, ул. Ленина, д. 22":{"lat":56.283485,"lon":37.482942},"Московская область, Дмитровский, с. Ольгово, тер. Пансионата Радуга, д. 6":{"lat":56.265797,"lon":37.344161},"Московская область, Дмитровский, р.п. Деденево, ул. Больничная, д. 10":{"lat":56.23458,"lon":37.499103},"Московская область, Дмитровский, г. Дмитров, д. Непейно, д. 38":{"lat":56.44006,"lon":37.572648},"Московская область, Дмитровский, г. Дмитров, п. Орудьевского т/б пр., д. 27":{"lat":56.445215,"lon":37.517087},"Московская область, Дмитровский, г. Дмитров, ул. Космонавтов, д. 6":{"lat":56.340595,"lon":37.545033},"Московская область, Дмитровский, г. Дмитров, ул. Дубненская, д. 7":{"lat":56.380832,"lon":37.520536},"Московская область, Дмитровский, г. Дмитров, ул. Космонавтов, д. 7":{"lat":56.340041,"lon":37.546255},"Московская область, Дмитровский, г.Дмитров, мкр. ДЗФС, д. 26":{"lat":56.367607,"lon":37.537434},"Московская область, Дмитровский, г.Дмитров, мкр. ДЗФС, д. 27":{"lat":56.367537,"lon":37.53826},"Московская область, Дмитровский, г. Дмитров, ул. Дубненская, д. 5":{"lat":56.380857,"lon":37.520024},"Московская область, Дмитровский, г. Дмитров, ул. Подлипичье, д. 1а":{"lat":56.34044,"lon":37.52792},"Московская область, Дмитровский, г. Дмитров, ул. Инженерная, д. 12":{"lat":56.339522,"lon":37.530229},"Московская область, Дмитровский, г. Дмитров, ул. Инженерная, д. 6а":{"lat":56.341034,"lon":37.527615},"Московская область, Дмитровский, г. Дмитров, ул. Правонабережная, д. 14":{"lat":56.359724,"lon":37.506064},"Московская область, Дмитровский, г. Яхрома, ул. Ленина, д. 23":{"lat":56.283724,"lon":37.48402},"Московская область, Дмитровский, г. Яхрома, ул. Парковая, д. 2":{"lat":56.292812,"lon":37.481163},"Московская область, Дмитровский, г. Яхрома, ул. Парковая, д. 1":{"lat":56.292388,"lon":37.481406},"Московская область, Дмитровский, г. Яхрома, ул. Ленина, д. 24":{"lat":56.282985,"lon":37.48375},"Московская область, Дмитровский, г. Яхрома, ул. Ленина, д. 25":{"lat":56.28247,"lon":37.484577},"Московская область, Дмитровский, г. Дмитров, п. Каналстрой, 72км, д. 1":{"lat":56.413199,"lon":37.667959},"Московская область, Дмитровский, р.п. Некрасовский, ул. Свобода, д. 12":{"lat":56.087645,"lon":37.504915},"Московская область, Дмитровский, р.п. Некрасовский, ул. Свобода, д. 5":{"lat":56.085806,"lon":37.504762},"Московская область, Дмитровский, с. Борисово, ПМКСМ, д. 13":{"lat":56.329158,"lon":37.566925},"Московская область, Дмитровский, ст. Трудовая, п. Городок 1, д. 23":{"lat":56.120799,"lon":37.515003},"Московская область, Дмитровский, ст. Трудовая, п. Городок 1, д. 15":{"lat":56.120799,"lon":37.515003},"Московская область, Дмитровский, р.п. Некрасовский, ул. Свобода, д. 2":{"lat":56.086098,"lon":37.50434},"Московская область, Дмитровский, р.п. Некрасовский, ул. Свобода, д. 1":{"lat":56.086469,"lon":37.504582},"Московская область, Дмитровский, рп. Некрасовский, мкр. Трудовая, д. 13":{"lat":56.125024,"lon":37.507663},"Московская область, Дмитровский, рп. Некрасовский, мкр. Трудовая, д. 20":{"lat":56.124592,"lon":37.507744},"Московская область, Дмитровский, рп. Некрасовский, мкр. Трудовая, д. 21":{"lat":56.124015,"lon":37.507358},"Московская область, Егорьевск, д. Верейка, ул. 8 Марта, д. 12":{"lat":55.433997,"lon":39.304528},"Московская область, Егорьевск, п. Рязановский, ул. Ленина, д. 14/14":{"lat":55.131831,"lon":39.550064},"Московская область, Жуковский, г. Жуковский, ул. Клубная,д. 9, кор.1":{"lat":55.609441,"lon":38.105717},"Московская область, Жуковский, г. Жуковский, ул. Клубная,д. 9, кор.3":{"lat":55.609217,"lon":38.106193},"Московская область, Жуковский, г. Жуковский, ул. Мичурина, д. 10":{"lat":55.609517,"lon":38.109184},"Московская область, Жуковский, г. Жуковский, ул. Мичурина, д. 6":{"lat":55.608846,"lon":38.108331},"Московская область, Жуковский, г. Жуковский, ул. Мичурина, д. 8":{"lat":55.609177,"lon":38.108735},"Московская область, Жуковский, г. Жуковский, ул. Чапаева, д. 2/22":{"lat":55.60908,"lon":38.102779},"Московская область, Жуковский, г. Жуковский, ул. Чапаева, д. 4":{"lat":55.609314,"lon":38.103067},"Московская область, Жуковский, г. Жуковский, ул. Чапаева,д. 6":{"lat":55.609543,"lon":38.103363},"Московская область, Истра, г. Дедовск, ул. Больничная, д. 7":{"lat":55.857604,"lon":37.122637},"Московская область, Истра, г. Дедовск, ул. Дедово, д. 4":{"lat":55.867,"lon":37.111632},"Московская область, Истра, д. Исаково, д. 101":{"lat":55.829335,"lon":37.153314},"Московская область, Кашира, МО, р-н. Каширский, п. Топканово, ул. Парковая, д. 3":{"lat":54.713975,"lon":38.480359},"Московская область, Кашира, МО, р-н. Каширский, г. Кашира, ул. Чичерина, д. 50":{"lat":54.858896,"lon":38.194524},"Московская область, Кашира, г. Кашира, ул. Московская, д. 2":{"lat":54.851759,"lon":38.249295},"Московская область, Клин, г. Клин, ул. Мира, д. 46":{"lat":56.322754,"lon":36.734133},"Московская область, Красногорск, г. Красногорск, ул. Парковая, д. 6":{"lat":55.833258,"lon":37.315065},"Московская область, Лобня, г. Лобня, ул. Научный городок, д. 17":{"lat":56.01242,"lon":37.47492},"Московская область, Лосино-Петровский, рп. Свердловский, ул. Северная, д. 2":{"lat":55.908994,"lon":38.147183},"Московская область, Луховицы, м.о. Луховицы, рп. Белоомут, ул. 50 лет Октября, д. 18":{"lat":54.944016,"lon":39.324695},"Московская область, Можайский, д. Шохово, ул. Центральная д.20":{"lat":55.506061,"lon":35.632987},"Московская область, Можайский, п. Медико-инструментального завода, д. 3":{"lat":55.532156,"lon":35.962606},"Московская область, Одинцово, г. Звенигород, ш. Нахабинское, д. 9":{"lat":55.743198,"lon":36.857364},"Московская область, Одинцово, п. ВНИИССОК, д. 6 а":{"lat":55.658967,"lon":37.208471},"Московская область, Одинцово, рп. Большие Вяземы, ул. Институт, д. 5":{"lat":55.627117,"lon":36.995947},"Московская область, Одинцово, с. Усово, д. 62":{"lat":55.728322,"lon":37.212899},"Московская область, Орехово-Зуево, пос. Чистое д. 12":{"lat":55.619528,"lon":39.208444},"Московская область, Павлово-Посадский, г. Павловский Посад, пер. М.Горького 3-й, д. 11/3":{"lat":55.788014,"lon":38.652189},"Московская область, Подольск, г. Подольск, ул. Циолковского, д. 5":{"lat":55.400767,"lon":37.55796},"Московская область, Подольск, г. Подольск, ул. Народная, д. 19 А":{"lat":55.416898,"lon":37.540479},"Московская область, Подольск, р-н. Подольский, п. Дубровицы, д. 66":{"lat":55.438338,"lon":37.487721},"Московская область, Подольск, г. Подольск, мкр. Климовск, ул. Южный поселок, д. 12":{"lat":55.37192,"lon":37.55142},"Московская область, Пушкинский, г. Красноармейск, ул. Свердлова, д. 23":{"lat":56.106509,"lon":38.138335},"Московская область, Пушкинский, г. Красноармейск, ул. Академика Янгеля, д. 15":{"lat":56.108573,"lon":38.145458},"Московская область, Пушкинский, г. Красноармейск, ул. Лермонтова, д. 14":{"lat":56.109461,"lon":38.132091},"Московская область, Пушкинский, г. Красноармейск, ул. Лермонтова, д. 19":{"lat":56.110927,"lon":38.132091},"Московская область, Пушкинский, г. Красноармейск, ул. Лермонтова, д. 6":{"lat":56.107639,"lon":38.131642},"Московская область, Пушкинский, г. Красноармейск, ул. Лермонтова, д. 7":{"lat":56.108146,"lon":38.131211},"Московская область, Пушкинский, г. Красноармейск, ул. Трудовой поселок, д. 1а":{"lat":56.116187,"lon":38.16082},"Московская область, Пушкинский, г. Красноармейск, ул. Трудовой поселок, д. 4":{"lat":56.116187,"lon":38.16082},"Московская область, Пушкинский, г. Красноармейск, ул. Свердлова, д. 12":{"lat":56.105942,"lon":38.136062},"Московская область, Пушкинский, г. Красноармейск, ул. Академика Янгеля, д. 7":{"lat":56.109325,"lon":38.143581},"Московская область, Пушкинский, г. Пушкино, ул. Озерная, д. 15, корпус 1":{"lat":56.005948,"lon":37.852554},"Московская область, Пушкинский, г. Пушкино, ул. Озерная, д. 15, корпус 4":{"lat":56.006326,"lon":37.851844},"Московская область, Пушкинский, г. Красноармейск, ул. Дачная, д. 37":{"lat":56.122194,"lon":38.124402},"Московская область, Пушкинский, г. Красноармейск, ул. Лермонтова, д. 11":{"lat":56.109155,"lon":38.131283},"Московская область, Пушкинский, г. Пушкино, ул. Текстильщиков, д. 6":{"lat":55.988605,"lon":37.847775},"Московская область, Пушкинский, г. Пушкино, ул. Текстильщиков, д. 8":{"lat":55.988263,"lon":37.847299},"Московская область, Пушкинский, г. Красноармейск, ул. Лермонтова, д. 12":{"lat":56.10911,"lon":38.131957},"Московская область, Пушкинский, г. Красноармейск, ул. Трудовой поселок, д. 6":{"lat":56.116187,"lon":38.16082},"Московская область, Пушкинский, г. Пушкино, Акуловское шоссе, д. 15, корп. 13":{"lat":56.006588,"lon":37.825982},"Московская область, Пушкинский, г. Пушкино, Акуловское шоссе, д. 15, корп. 9":{"lat":56.006643,"lon":37.826619},"Московская область, Пушкинский, г. Пушкино, Акуловское шоссе, д. 23/3":{"lat":56.007202,"lon":37.825568},"Московская область, Пушкинский, г. Пушкино, Акуловское шоссе, д. 27":{"lat":56.007413,"lon":37.824966},"Московская область, Пушкинский, г. Пушкино, ул. Октябрьская, д. 40":{"lat":55.988772,"lon":37.852419},"Московская область, Пушкинский, МО, р-н. Пушкинский, г. Пушкино, ул. Речная, д. 1":{"lat":55.966484,"lon":37.797065},"Московская область, Пушкинский, г.п. Лесной, ул. Центральная, д. 8":{"lat":56.071203,"lon":37.93103},"Московская область, Пушкинский, нп. Софрино-1, д. 70":{"lat":56.152394,"lon":37.793031},"Московская область, Пушкинский, нп. Софрино-1, д. 71":{"lat":56.15269,"lon":37.793103},"Московская область, Пушкинский, нп. Софрино-1, д. 72":{"lat":56.152886,"lon":37.793112},"Московская область, Пушкинский, г. Пушкино, ул. Маяковского, д. 13/5":{"lat":56.007096,"lon":37.825011},"Московская область, Пушкинский, г. Красноармейск, ул. Свердлова, д. 21":{"lat":56.106424,"lon":38.137481},"Московская область, Пушкинский, г. Красноармейск, ул. Чкалова, д. 15":{"lat":56.103256,"lon":38.130052},"Московская область, Пушкинский, г. Пушкино, ул. Оранжерейная, д. 23":{"lat":56.002269,"lon":37.837004},"Московская область, Рузский, д. Старая Руза, д. 9":{"lat":55.649058,"lon":36.331571},"Московская область, Рузский, МО, р-н. Рузский, г. Руза, ул. Садовая, д. 5":{"lat":55.699477,"lon":36.205223},"Московская область, Рузский, МО, р-н. Рузский, д. Старая Руза, д. 10":{"lat":55.6486,"lon":36.326648},"Московская область, Рузский, МО, р-н. Рузский, с. Покровское, д. 16":{"lat":55.875223,"lon":36.318824},"Московская область, Рузский, р.п. Тучково, КСМ, д. 19":{"lat":55.599265,"lon":36.473253},"Московская область, Рузский, г. Руза, ул. Городянская, д. 12":{"lat":55.699928,"lon":36.187877},"Московская область, Рузский, д. Щелковка, ул. Первомайская, д. 29/4, к.0, стр. 0":{"lat":55.432265,"lon":35.746301},"Московская область, Рузский, п. Дорохово, ул. Заводская, д. 2":{"lat":55.5539,"lon":36.360578},"Московская область, Рузский, п. Тучково, ул. Мира, д. 3":{"lat":55.598604,"lon":36.491588},"Московская область, Сергиево-Посадский, МО, р-н. Сергиево-Посадский, г. Хотьково, ул. Горжовицкая, д. 2":{"lat":56.24476,"lon":37.985073},"Московская область, Сергиево-Посадский, МО, р-н. Сергиево-Посадский, с. Муханово, ул. Центральная, д. 15":{"lat":56.512355,"lon":38.320666},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Куликова, д. 18б":{"lat":56.294291,"lon":38.11868},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Куликова, д. 20":{"lat":56.293602,"lon":38.117709},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Московская, д. 14":{"lat":56.269721,"lon":38.123513},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Школьная, д. 17":{"lat":56.292418,"lon":38.121788},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Школьная, д. 19":{"lat":56.292008,"lon":38.121761},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Куликова, д. 18":{"lat":56.293562,"lon":38.118446},"Московская область, Сергиево-Посадский, г. Сергиев Посад, д. Наугольное, д. 99":{"lat":56.362197,"lon":38.192144},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Инженерная, д. 11":{"lat":56.32207,"lon":38.139664},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Куликова, д. 18А":{"lat":56.293891,"lon":38.118635},"Московская область, Сергиево-Посадский, г. Сергиев Посад, проезд. Хотьковский, д. 17":{"lat":56.294741,"lon":38.117054},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Бероунская, д. 14":{"lat":56.31595,"lon":38.145665},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Вифанская, д. 26а":{"lat":56.308605,"lon":38.143581},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Инженерная, д. 13":{"lat":56.322424,"lon":38.140284},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Куликова, д. 2":{"lat":56.293067,"lon":38.125956},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Стахановская, д. 3":{"lat":56.314327,"lon":38.148692},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Стахановская, д. 4":{"lat":56.314502,"lon":38.148117},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. 2-й Кирпичный завод, д. 10":{"lat":56.294326,"lon":38.142889},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. 2-й Кирпичный завод, д. 11":{"lat":56.294546,"lon":38.143329},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. 2-й Кирпичный завод, д. 12":{"lat":56.293936,"lon":38.143581},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. 2-й Кирпичный завод, д. 13":{"lat":56.294146,"lon":38.144021},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. 2-й Кирпичный завод, д. 14":{"lat":56.294076,"lon":38.142386},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. 2-й Кирпичный завод, д. 15":{"lat":56.293682,"lon":38.143096},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. 2-й Кирпичный завод, д. 16":{"lat":56.293422,"lon":38.142566},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. 2-й Кирпичный завод, д. 17":{"lat":56.293807,"lon":38.141838},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Клементьевская, д. 79":{"lat":56.292373,"lon":38.123575},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Клементьевская, д. 81":{"lat":56.291918,"lon":38.123504},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Клементьевская, д. 82":{"lat":56.291963,"lon":38.122821},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Куликова, д. 3":{"lat":56.292708,"lon":38.125884},"Московская область, Сергиево-Посадский, с. Константиново, ул. Больничная, д. 40":{"lat":56.551085,"lon":38.030258},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. Горького, д. 12":{"lat":56.436517,"lon":38.220378},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. Горького, д. 18":{"lat":56.437034,"lon":38.217539},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. Горького, д. 10":{"lat":56.436218,"lon":38.220342},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. 1 Мая, д. 7":{"lat":56.442438,"lon":38.240428},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. 1 Мая, д. 31":{"lat":56.440478,"lon":38.246483},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. Горького, д. 23":{"lat":56.435501,"lon":38.218725},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. Строителей, д. 11":{"lat":56.440602,"lon":38.242692},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. 1 Мая, д. 8":{"lat":56.442135,"lon":38.239674},"Московская область, Сергиево-Посадский, г. Краснозаводск, пер. Больничный, д. 14":{"lat":56.437393,"lon":38.21842},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. Горького, д. 15":{"lat":56.435457,"lon":38.221123},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. Горького, д. 17":{"lat":56.435482,"lon":38.219372},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. 1 Мая, д. 10":{"lat":56.441627,"lon":38.24112},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. Трудовые Резервы, д. 5":{"lat":56.438995,"lon":38.245971},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. 1 Мая, д. 12":{"lat":56.441354,"lon":38.242},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. 1 Мая, д. 14":{"lat":56.440921,"lon":38.243438},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. 1 Мая, д. 16":{"lat":56.440602,"lon":38.244453},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. 1 Мая, д. 17":{"lat":56.44206,"lon":38.24156},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. 1 Мая, д. 18":{"lat":56.440135,"lon":38.245827},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. 1 Мая, д. 19":{"lat":56.441767,"lon":38.242557},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. 1 Мая, д. 20":{"lat":56.439811,"lon":38.24686},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. 1 Мая, д. 27":{"lat":56.4411,"lon":38.244632},"Московская область, Сергиево-Посадский, г. Краснозаводск, пер. Больничный, д. 13":{"lat":56.437811,"lon":38.219695},"Московская область, Сергиево-Посадский, г. Краснозаводск, пер. Больничный, д. 3":{"lat":56.437213,"lon":38.219453},"Московская область, Сергиево-Посадский, г. Краснозаводск, пер. Больничный, д. 5":{"lat":56.43696,"lon":38.218662},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. Трудовые Резервы, д. 3":{"lat":56.439333,"lon":38.244983},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. Трудовые Резервы, д. 7":{"lat":56.439323,"lon":38.246761},"Московская область, Сергиево-Посадский, г. Сергиев Посад, Березовый пер., д. 17":{"lat":56.309784,"lon":38.148432},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Ильинская, д. 11а":{"lat":56.308221,"lon":38.123647},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Кузьминова, д. 28/18":{"lat":56.307157,"lon":38.119524},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Маслиева, д. 5":{"lat":56.289355,"lon":38.179307},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Садовая, д. 10":{"lat":56.319499,"lon":38.119362},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Садовая, д. 14":{"lat":56.320138,"lon":38.118976},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Садовая, д. 14а":{"lat":56.320198,"lon":38.119461},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Садовая, д. 14б":{"lat":56.320233,"lon":38.119964},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Садовая, д. 8":{"lat":56.319095,"lon":38.11965},"Московская область, Сергиево-Посадский, п. Мостовик, ул. Пионерская, д. 16":{"lat":56.308076,"lon":37.928416},"Московская область, Сергиево-Посадский, г. Сергиев Посад, ул. Кирова, д. 13а":{"lat":56.308835,"lon":38.123279},"Московская область, Сергиево-Посадский, МО, р-н. Сергиево-Посадский, с. Сватково, д. 1Б":{"lat":56.385312,"lon":38.21417},"Московская область, Сергиево-Посадский, г. Краснозаводск, ул. 1 Мая, д. 6":{"lat":56.442404,"lon":38.238793},"Московская область, Серебряные Пруды, рп. Серебряные Пруды, ул. Набережная, д. 83":{"lat":54.471985,"lon":38.699333},"Московская область, Серебряные Пруды, рп. Серебряные Пруды, ул. Южная, д. 35":{"lat":54.461598,"lon":38.726165},"Московская область, Солнечногорск, с. Алабушево, ул. Первомайская, д. 49":{"lat":56.010453,"lon":37.125278},"Московская область, Солнечногорск, г. Солнечногорск, ул. Красная, д. 168":{"lat":56.195079,"lon":36.967012},"Московская область, Солнечногорск, г. Солнечногорск, ул. Ленинградская, д. 2б":{"lat":56.191313,"lon":36.969025},"Московская область, Солнечногорск, г. Солнечногорск, ул. Прожекторная, д. 2":{"lat":56.188934,"lon":36.994743},"Московская область, Солнечногорск, д.п. Поварово, мкр. Поваровка, д. 18":{"lat":56.064484,"lon":37.071639},"Московская область, Ступино, д. Городище, ул. Новая, д. 16":{"lat":54.88701,"lon":38.222067},"Московская область, Ступино, д. Городище, ул. Новая, д. 18":{"lat":54.887538,"lon":38.222426},"Московская область, Ступино, р.п. Жилево, ул. Железнодорожная, д. 11":{"lat":54.985535,"lon":38.034409},"Московская область, Ступино, р.п. Михнево, ул. Советская, д. 38/23":{"lat":55.119353,"lon":37.948916},"Московская область, Ступино, р.п. Михнево, ул. Советская, д. 36а":{"lat":55.119193,"lon":37.948107},"Московская область, Ступино, р.п. Михнево, ул. Советская, д. 15":{"lat":55.119801,"lon":37.954683},"Московская область, Ступино, р.п. Михнево, ул. Советская, д. 19":{"lat":55.119559,"lon":37.953434},"Московская область, Ступино, г. Ступино, ул. Куйбышева, д. 39":{"lat":54.885839,"lon":38.071536},"Московская область, Ступино, г. Ступино, ул. Куйбышева, д. 47":{"lat":54.886704,"lon":38.071698},"Московская область, Ступино, г. Ступино, ул. Куйбышева, д. 45":{"lat":54.886704,"lon":38.071698},"Московская область, Ступино, г. Ступино, ул. Крупской, д. 34":{"lat":54.885767,"lon":38.070907},"Московская область, Талдомский, рп. Вербилки, ул. Гоголя, д. 6":{"lat":56.536381,"lon":37.600513},"Московская область, Шатура, г. Рошаль, ул. 3 Интернационала, д. 1":{"lat":55.656565,"lon":39.868939},"Московская область, Шатура, г. Рошаль, ул. 3я Пятилетки, д. 76":{"lat":55.669468,"lon":39.844038},"Московская область, Шатура, г. Рошаль, ул. Коммунаров, д. 4":{"lat":55.660013,"lon":39.880168},"Московская область, Шатура, г. Рошаль, ул. Могэс, д. 14":{"lat":55.672356,"lon":39.8593},"Московская область, Шатура, г. Рошаль, ул. МОГЭС, д. 4":{"lat":55.672854,"lon":39.861474},"Московская область, Шатура, г. Рошаль, ул. Октябрьской революции, д. 39":{"lat":55.65881,"lon":39.889996},"Московская область, Шатура, г. Рошаль, ул. Октябрьской Революции, д. 50":{"lat":55.657916,"lon":39.884902},"Московская область, Шатура, г. Рошаль, ул. Октябрьской революции, д. 7":{"lat":55.65948,"lon":39.870278},"Московская область, Шатура, г. Рошаль, ул. Октябрьской революции, д. 9":{"lat":55.659404,"lon":39.871679},"Московская область, Шатура, г. Рошаль, ул. Свердлова, д. 41":{"lat":55.668498,"lon":39.852662},"Московская область, Шатура, г. Рошаль, ул. Урицкого, д. 42":{"lat":55.666949,"lon":39.846607},"Московская область, Шатура, г. Рошаль, ул. Урицкого, д. 44":{"lat":55.667467,"lon":39.84658},"Московская область, Шатура, г. Рошаль, ул. Урицкого, д. 73":{"lat":55.673438,"lon":39.846769},"Московская область, Шатура, г. Рошаль, ул. Фридриха Энгельса, д. 14":{"lat":55.657205,"lon":39.872964},"Московская область, Шатура, г. Шатура, мкр. Керва, проезд. Больничный, д. 4":{"lat":55.613855,"lon":39.578217},"Московская область, Шатура, г. Шатура, пр-кт. Ильича, д. 10":{"lat":55.575342,"lon":39.547396},"Московская область, Шатура, г. Шатура, ул. Клары Цеткин, д. 14":{"lat":55.578213,"lon":39.539033},"Московская область, Шатура, г. Шатура, ул. Энергетиков, д. 12":{"lat":55.579414,"lon":39.534676},"Московская область, Шатура, г. Шатура, ул. Энергетиков, д. 4":{"lat":55.579465,"lon":39.5372},"Московская область, Шатура, г. Шатура, ул. Энергетиков, д. 8":{"lat":55.579368,"lon":39.535799},"Московская область, Шатура, п. Бакшеево, ул. Комсомольская, д. 19/8":{"lat":55.711787,"lon":39.87344},"Московская область, Шатура, п. Воймежный, д. 1":{"lat":55.56645,"lon":39.864007},"Московская область, Шатура, п. Пустоши, ул. Вокзальная, д. 9/4":{"lat":55.60222,"lon":39.94756},"Московская область, Шатура, п. Пустоши, ул. Центральная, д. 18/5":{"lat":55.603593,"lon":39.950246},"Московская область, Шатура, п. Пустоши, ул. Школьная, д. 3":{"lat":55.602449,"lon":39.942547},"Московская область, Шатура, п. Пустоши, ул. Школьная, д. 6/8":{"lat":55.603013,"lon":39.942745},"Московская область, Шатура, п. Радовицкий, ул. Клубная, д. 3":{"lat":55.13287,"lon":39.800038},"Московская область, Шатура, п. Радовицкий, ул. Лесозаводская, д. 2а":{"lat":55.125417,"lon":39.791334},"Московская область, Шатура, п. Радовицкий, ул. Лесозаводская, д. 2б":{"lat":55.125561,"lon":39.791936},"Московская область, Шатура, п. Радовицкий, ул. Мира, д. 36":{"lat":55.133231,"lon":39.795466},"Московская область, Шатура, п. Радовицкий, ул. Первомайская, д. 4":{"lat":55.130065,"lon":39.794487},"Московская область, Шатура, п. Радовицкий, ул. Первомайская, д. 6":{"lat":55.130297,"lon":39.793903},"Московская область, Шатура, п. Туголесский Бор, ул. 1 Мая, д. 6":{"lat":55.554603,"lon":39.811914},"Московская область, Шатура, п. Туголесский Бор, ул. Горького, д. 18":{"lat":55.555963,"lon":39.805347},"Московская область, Шатура, п. Туголесский Бор, ул. Горького, д. 22":{"lat":55.555871,"lon":39.803245},"Московская область, Шатура, п. Туголесский Бор, ул. Клубная, д. 3":{"lat":55.555963,"lon":39.796706},"Московская область, Шатура, п. Туголесский Бор, ул. Клубная, д. 6":{"lat":55.555973,"lon":39.795026},"Московская область, Шатура, п. Туголесский Бор, ул. Октябрьская, д. 3":{"lat":55.553361,"lon":39.811339},"Московская область, Шатура, п. Туголесский Бор, ул. Советская, д. 10/7":{"lat":55.55719,"lon":39.807737},"Московская область, Шатура, п. Туголесский Бор, ул. Советская, д. 14":{"lat":55.560265,"lon":39.806785},"Московская область, Шатура, п. Туголесский Бор, ул. Советская, д. 3":{"lat":55.55497,"lon":39.808779},"Московская область, Шатура, пос. Долгуша, д. 26":{"lat":55.648555,"lon":39.586742},"Московская область, Шатура, г. Рошаль, ул. 3 Интернационала, д. 11":{"lat":55.655676,"lon":39.873835},"Московская область, Шатура, г. Рошаль, ул. Свердлова, д. 38":{"lat":55.668092,"lon":39.851826},"Московская область, Шатура, г. Рошаль, ул. Свердлова, д. 39":{"lat":55.668112,"lon":39.852698},"Московская область, Шатура, г. Рошаль, ул. Свердлова, д. 42":{"lat":55.668869,"lon":39.851799},"Московская область, Шатура, г. Рошаль, ул. Свердлова, д. 47":{"lat":55.669656,"lon":39.852599},"Московская область, Шатура, г. Рошаль, ул. Урицкого, д. 74":{"lat":55.673844,"lon":39.84596},"Московская область, Шатура, г. Шатура, мкр. Керва, проезд. Больничный, д. 2":{"lat":55.61325,"lon":39.578298},"Московская область, Шатура, г. Шатура, ул. Энергетиков, д. 6":{"lat":55.579398,"lon":39.536374},"Московская область, Шатура, МО, р-н. Шатурский, п. Лесозавода, ул. Лесная, д. 26":{"lat":55.234764,"lon":39.653595},"Московская область, Шатура, п. Пустоши, ул. Вокзальная, д. 6":{"lat":55.60371,"lon":39.946104},"Московская область, Шатура, п. Пустоши, ул. Заводская, д. 3":{"lat":55.603212,"lon":39.950794},"Московская область, Шатура, п. Пустоши, ул. Центральная, д. 2":{"lat":55.602286,"lon":39.944775},"Московская область, Шатура, п. Туголесский Бор, ул. Горького, д. 1":{"lat":55.556176,"lon":39.813666},"Московская область, Шатура, п. Туголесский Бор, ул. Горького, д. 24":{"lat":55.55582,"lon":39.802203},"Московская область, Шатура, п. Туголесский Бор, ул. Советская, д. 12/6":{"lat":55.560265,"lon":39.806785},"Московская область, Шатура, п. Туголесский Бор, ул. Советская, д. 4/17":{"lat":55.555601,"lon":39.808015},"Московская область, Шатура, п. Шатурторф, ул. Красный поселок, д. 8":{"lat":55.557923,"lon":39.420419},"Московская область, Шатура, г. Рошаль, ул. Октябрьской революции, д. 41":{"lat":55.659114,"lon":39.890005},"Московская область, Шатура, п. Туголесский Бор, ул. Горького д. 25/20":{"lat":55.555433,"lon":39.804171},"Московская область, Щелково, п. Краснознаменский, д. 15":{"lat":55.937044,"lon":37.936277}};
+const geoCache=new Map();
+Object.keys(EMBEDDED_COORDS).forEach(k=>geoCache.set(k,EMBEDDED_COORDS[k]));
+// Все маркеры с данными: [{placemark, district, status, addr}]
+let allMarkers=[];
+let geocodingDone=false;
+let lastDataHash='';
+
+function geocodeAllThenRender(){
+  if(!mapReady||!ymap)return;
+  const addrCol=state.headers.findIndex(h=>h&&h.toLowerCase().includes('адрес'));
+  if(state.statusCol<0||addrCol<0)return;
+
+  const items=[];
+  for(const r of state.rows){
+    const addr=(r[addrCol]||'').trim();
+    const district=state.districtCol>=0?(r[state.districtCol]||'').trim():'';
+    const status=(r[state.statusCol]||'').trim();
+    if(addr){
+      items.push({addr,district,status,
+        query:'Московская область, '+(district?district+', ':'')+addr});
+    }
+  }
+
+  const dataHash=items.map(a=>a.query+a.status).join('|');
+  if(dataHash===lastDataHash){updateMapFilters();return}
+  lastDataHash=dataHash;
+
+  const prog=document.getElementById('map-progress');
+  const countEl=document.getElementById('map-count');
+  const found=items.filter(it=>geoCache.has(it.query)).length;
+  countEl.textContent=items.length+' адресов';
+  prog.textContent='Загружено из встроенных данных: '+found+' из '+items.length;
+  buildMarkers(items);
+  updateMapFilters();
+}
+
+function buildMarkers(items){
+  ymap.geoObjects.removeAll();
+  allMarkers=[];
+  for(var i=0;i<items.length;i++){
+    var it=items[i];
+    var coords=geoCache.get(it.query);
+    if(!coords)continue;
+    var mc=markerColor(it.status);
+    var pm=new ymaps.Placemark([coords.lat,coords.lon],{
+      balloonContentHeader:'<b style="color:'+mc.color+'">'+escHtml(it.status)+'</b>',
+      balloonContentBody:'<div style="font-size:13px;line-height:1.5"><b>'+escHtml(it.district)+'</b><br>'+escHtml(it.addr)+
+        '</div><button onclick="openPanorama('+coords.lat+','+coords.lon+')" style="margin-top:8px;padding:5px 12px;background:#0891b2;color:#fff;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;font-family:Manrope,sans-serif">📷 Панорама</button>',
+      hintContent:escHtml(it.district)+': '+escHtml(it.addr)
+    },{preset:mc.preset});
+    allMarkers.push({placemark:pm,district:it.district,status:it.status});
+  }
+}
+
+function updateMapFilters(){
+  if(!ymap||!allMarkers.length)return;
+  ymap.geoObjects.removeAll();
+
+  // Применяем глобальные фильтры
+  const distFilter=state.filters.get(state.districtCol);
+  const statFilter=state.filters.get(state.statusCol);
+  const q=state.search.toLowerCase().trim();
+
+  let shown=0;
+  for(var i=0;i<allMarkers.length;i++){
+    var m=allMarkers[i];
+    // Фильтр по округу
+    if(distFilter&&distFilter.size>0&&!distFilter.has(m.district))continue;
+    // Фильтр по статусу
+    if(statFilter&&statFilter.size>0&&!statFilter.has(m.status))continue;
+    // Поиск
+    if(q&&!(m.district.toLowerCase().includes(q)||m.status.toLowerCase().includes(q)))continue;
+    ymap.geoObjects.add(m.placemark);
+    shown++;
+  }
+
+  document.getElementById('map-count').textContent=shown+' из '+allMarkers.length+' на карте';
+
+  if(shown>0){
+    try{ymap.setBounds(ymap.geoObjects.getBounds(),{checkZoomRange:true,zoomMargin:40})}catch(e){}
+  }
+}
+
+// При загрузке данных геокодируем все адреса
+const _origRA=renderAll;
+renderAll=function(){_origRA();if(mapReady)geocodeAllThenRender()};
+
+// === ПАНОРАМА: клик по карте или маркеру → открывает Яндекс Панораму в новой вкладке ===
+window.openPanorama=function(lat,lon){
+  try{ymap.balloon.close()}catch(e){}
+  window.open('https://yandex.ru/maps/?ll='+lon+','+lat+'&z=18&l=stv,sta&panorama[point]='+lon+','+lat+'&panorama[direction]=0,0&panorama[span]=130,80','_blank');
+};
+
+</script>
+</body>
+</html>
